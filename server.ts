@@ -787,6 +787,16 @@ async function startServer() {
     res.json(stats);
   });
 
+  // 11b. Public Verification Endpoint for QR Code scans
+  app.get("/api/leave/verify/:id", (req, res) => {
+    const { id } = req.params;
+    const leave = leaves.find(l => l.id === id);
+    if (!leave) {
+      return res.status(404).json({ error: "Dokumen cuti tidak ditemukan." });
+    }
+    res.json(leave);
+  });
+
   // 12. Reset Database (Useful for Demo / Admin purposes)
   app.post("/api/admin/reset", (req, res) => {
     const { key } = req.body;

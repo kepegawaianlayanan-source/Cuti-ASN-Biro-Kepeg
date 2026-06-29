@@ -14,6 +14,7 @@ import SignatureModal from './components/SignatureModal';
 import UnitKerjaManagement from './components/UnitKerjaManagement';
 import UserManagement from './components/UserManagement';
 import LeaveManagement from './components/LeaveManagement';
+import DocumentVerification from './components/DocumentVerification';
 import { 
   initAuth, 
   googleSignIn, 
@@ -40,6 +41,15 @@ export default function App() {
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const [verifyId, setVerifyId] = useState<string | null>(() => {
+    return new URLSearchParams(window.location.search).get('verify');
+  });
+
+  const handleGoToLogin = () => {
+    setVerifyId(null);
+    window.history.replaceState({}, '', window.location.pathname);
+  };
 
   // Password Modal Fields
   const [oldPassword, setOldPassword] = useState('');
@@ -451,6 +461,10 @@ export default function App() {
       setIsAdminResetting(false);
     }
   };
+
+  if (verifyId) {
+    return <DocumentVerification verifyId={verifyId} onGoToLogin={handleGoToLogin} />;
+  }
 
   if (!user) {
     return <LoginForm onLoginSuccess={handleLoginSuccess} />;

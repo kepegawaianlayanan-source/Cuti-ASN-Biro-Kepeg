@@ -361,6 +361,18 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
  
                       <p className="font-bold underline mt-0.5">{leave.pimpinanNama || 'Drs. MOCHAMAD HERNANTO M.M.'}</p>
                       <p className="font-mono text-[9px]">NIP. {leave.pimpinanNip || '196610071994031001'}</p>
+                      
+                      {leave.status === 'disetujui' && (
+                        <div className="absolute right-2 bottom-2 flex flex-col items-center bg-white p-1 border border-black/20 rounded shadow-sm">
+                          <img 
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=55x55&data=${encodeURIComponent(window.location.origin + '/?verify=' + leave.id)}`} 
+                            alt="QR Code Verifikasi" 
+                            className="w-10 h-10" 
+                            referrerPolicy="no-referrer"
+                          />
+                          <span className="text-[5px] text-slate-500 font-bold leading-none mt-0.5 uppercase tracking-wide">VERIFIKASI ASLI</span>
+                        </div>
+                      )}
                     </td>
                   </tr>
                   <tr className="border border-black">
@@ -687,6 +699,18 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
 
                   <p className="font-bold underline mt-0.5">{leave.pimpinanNama || 'Drs. MOCHAMAD HERNANTO M.M.'}</p>
                   <p className="font-mono text-[9px]">NIP. {leave.pimpinanNip || '196610071994031001'}</p>
+                  
+                  {leave.status === 'disetujui' && (
+                    <div className="absolute right-2 bottom-2 flex flex-col items-center bg-white p-1 border border-black/20 rounded shadow-sm">
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=55x55&data=${encodeURIComponent(window.location.origin + '/?verify=' + leave.id)}`} 
+                        alt="QR Code Verifikasi" 
+                        className="w-10 h-10" 
+                        referrerPolicy="no-referrer"
+                      />
+                      <span className="text-[5px] text-slate-500 font-bold leading-none mt-0.5 uppercase tracking-wide">VERIFIKASI ASLI</span>
+                    </div>
+                  )}
                 </td>
               </tr>
               <tr className="border border-black">
