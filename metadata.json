@@ -1,0 +1,6 @@
+{
+  "name": "Aplikasi Cuti ASN",
+  "description": "Sistem pengajuan dan persetujuan cuti ASN berjenjang dengan laporan otomatis, ekspor PDF, dan notifikasi real-time.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
