@@ -284,6 +284,135 @@ async function startServer() {
     res.json({ success: true, user: safeUser, message: "Pegawai berhasil dihapus dari sistem." });
   });
 
+  // 2d. Leave Management Admin Delete Endpoint
+  app.delete("/api/admin/leave/:id", (req, res) => {
+    const { id } = req.params;
+    const index = leaves.findIndex(l => l.id === id);
+    if (index === -1) {
+      return res.status(404).json({ error: "Pengajuan cuti tidak ditemukan." });
+    }
+    const deletedLeave = leaves.splice(index, 1)[0];
+    writeDb(LEAVES_FILE, leaves);
+    res.json({ success: true, leave: deletedLeave, message: "Pengajuan cuti berhasil dihapus dari sistem." });
+  });
+
+  // 2e. Leave Management Admin Direct Submit Endpoint
+  app.post("/api/admin/leave/submit", (req, res) => {
+    const { 
+      nip, 
+      jenisCuti, 
+      alasan, 
+      lamaHari, 
+      tanggalMulai, 
+      tanggalSelesai, 
+      alamatCuti, 
+      telepon,
+      verifikatorNip,
+      pimpinanNip,
+      catatanCuti,
+      status,
+      verifikatorNotes,
+      pimpinanNotes
+    } = req.body;
+
+    if (!nip || !jenisCuti || !alasan || !lamaHari || !tanggalMulai || !tanggalSelesai || !alamatCuti || !telepon || !verifikatorNip || !pimpinanNip) {
+      return res.status(400).json({ error: "Formulir pengajuan belum lengkap." });
+    }
+
+    const user = users.find(u => u.nip === String(nip));
+    if (!user) {
+      return res.status(404).json({ error: "Pegawai pengaju tidak ditemukan." });
+    }
+
+    const verifikator = users.find(u => u.nip === String(verifikatorNip));
+    if (!verifikator) {
+      return res.status(404).json({ error: "Atasan / Verifikator tidak ditemukan." });
+    }
+
+    const pimpinan = users.find(u => u.nip === String(pimpinanNip));
+    if (!pimpinan) {
+      return res.status(404).json({ error: "Pimpinan yang berwenang tidak ditemukan." });
+    }
+
+    const actionDate = new Date().toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric"
+    });
+
+    const finalStatus = status || "menunggu_verifikasi";
+
+    const newRequest: LeaveRequest = {
+      id: `cuti_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      nip: user.nip,
+      nama: user.nama,
+      jabatan: user.jabatan,
+      unitKerja: user.unit_kerja,
+      pangkatGol: user.pangkatGol || "Penata (III/c)",
+      jenisCuti,
+      alasan,
+      lamaHari: Number(lamaHari),
+      tanggalMulai,
+      tanggalSelesai,
+      alamatCuti,
+      telepon,
+      catatanCuti: catatanCuti || {
+        tahunan: { nMinus2: "-", nMinus1: "-", n: "12" },
+        besar: "-",
+        sakit: "-",
+        melahirkan: "-",
+        alasanPenting: "-",
+        luarTanggungan: "-"
+      },
+      status: finalStatus,
+      
+      verifikatorNip: verifikator.nip,
+      verifikatorNama: verifikator.nama,
+      verifikatorJabatan: verifikator.jabatan,
+      verifikatorStatus: (finalStatus === "disetujui" || finalStatus === "menunggu_pimpinan") ? "disetujui" : (finalStatus === "ditolak" ? "ditolak" : undefined),
+      verifikatorNotes: verifikatorNotes || ((finalStatus === "disetujui" || finalStatus === "menunggu_pimpinan") ? "Disetujui oleh Admin" : undefined),
+      verifikatorDate: (finalStatus === "disetujui" || finalStatus === "menunggu_pimpinan") ? actionDate : undefined,
+      verifikatorSignature: (finalStatus === "disetujui" || finalStatus === "menunggu_pimpinan") ? (verifikator.signature || "placeholder") : undefined,
+
+      pimpinanNip: pimpinan.nip,
+      pimpinanNama: pimpinan.nama,
+      pimpinanJabatan: pimpinan.jabatan,
+      pimpinanStatus: finalStatus === "disetujui" ? "disetujui" : (finalStatus === "ditolak" ? "ditolak" : undefined),
+      pimpinanNotes: pimpinanNotes || (finalStatus === "disetujui" ? "Disetujui oleh Admin" : undefined),
+      pimpinanDate: finalStatus === "disetujui" ? actionDate : undefined,
+      pimpinanSignature: finalStatus === "disetujui" ? (pimpinan.signature || "placeholder") : undefined,
+
+      pemohonSignature: user.signature || "placeholder",
+      createdAt: new Date().toISOString()
+    };
+
+    leaves.unshift(newRequest);
+    writeDb(LEAVES_FILE, leaves);
+
+    // Send notifications
+    sendNotification(
+      user.nip,
+      "Cuti Diinput oleh Admin",
+      `Data cuti Anda telah diinput oleh Admin dengan status: ${finalStatus.replace("_", " ")}.`
+    );
+
+    if (finalStatus === "menunggu_verifikasi") {
+      sendNotification(
+        verifikator.nip,
+        "Pengajuan Cuti Baru",
+        `${user.nama} memiliki pengajuan cuti baru yang diinput oleh Admin dan memerlukan verifikasi Anda.`
+      );
+    } else if (finalStatus === "menunggu_pimpinan") {
+      sendNotification(
+        pimpinan.nip,
+        "Persetujuan Cuti Baru",
+        `${user.nama} memiliki pengajuan cuti baru yang telah diverifikasi dan menunggu persetujuan Anda.`
+      );
+    }
+
+    res.json({ success: true, leaveRequest: newRequest, message: "Pengajuan cuti berhasil diinput oleh Admin." });
+  });
+
   // 3. Authenticate User
   app.post("/api/auth/login", (req, res) => {
     const { nip, password } = req.body;

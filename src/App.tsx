@@ -13,6 +13,7 @@ import NotificationCenter from './components/NotificationCenter';
 import SignatureModal from './components/SignatureModal';
 import UnitKerjaManagement from './components/UnitKerjaManagement';
 import UserManagement from './components/UserManagement';
+import LeaveManagement from './components/LeaveManagement';
 import { 
   initAuth, 
   googleSignIn, 
@@ -692,6 +693,18 @@ export default function App() {
                 </button>
 
                 <button
+                  onClick={() => setActiveTab('manajemen_cuti')}
+                  className={`w-full text-left px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center space-x-3 transition-all ${
+                    activeTab === 'manajemen_cuti'
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>Manajemen Cuti Pegawai</span>
+                </button>
+
+                <button
                   onClick={handleResetSystem}
                   disabled={isAdminResetting}
                   className="w-full text-left px-4 py-2 rounded-xl text-xs font-bold text-red-400 hover:bg-red-950/20 hover:text-red-300 flex items-center space-x-3 transition-all cursor-pointer"
@@ -1048,6 +1061,11 @@ export default function App() {
           {/* TAB 6: USER MANAGEMENT (ADMIN ONLY) */}
           {activeTab === 'manajemen_user' && user?.role === 'admin' && (
             <UserManagement showToast={showToast} />
+          )}
+
+          {/* TAB 7: LEAVE MANAGEMENT (ADMIN ONLY) */}
+          {activeTab === 'manajemen_cuti' && user?.role === 'admin' && (
+            <LeaveManagement showToast={showToast} onLeavesChange={fetchLeaves} />
           )}
 
         </main>

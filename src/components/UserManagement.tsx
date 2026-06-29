@@ -12,7 +12,17 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
   const [units, setUnits] = useState<UnitKerja[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<string>('all');
+  const [selectedUnitFilter, setSelectedUnitFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Reset page on filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedRoleFilter, selectedUnitFilter]);
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -164,6 +174,14 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
     }
   };
 
+  const normalizeUnitName = (name: string): string => {
+    if (!name) return '';
+    return name
+      .toLowerCase()
+      .replace(/^pusat\s*-\s*/, '')
+      .trim();
+  };
+
   const filteredUsers = users.filter(u => {
     const matchSearch = 
       u.nama.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -172,9 +190,15 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
       u.unit_kerja.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchRole = selectedRoleFilter === 'all' || u.role === selectedRoleFilter;
+    const matchUnit = selectedUnitFilter === 'all' || normalizeUnitName(u.unit_kerja) === normalizeUnitName(selectedUnitFilter);
     
-    return matchSearch && matchRole;
+    return matchSearch && matchRole && matchUnit;
   });
+
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentUsers = filteredUsers.slice(indexOfFirstItem, indexOfLastItem);
 
   const getRoleBadge = (r: UserRole) => {
     switch (r) {
@@ -226,6 +250,18 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
         </div>
         <div className="w-full md:w-48">
           <select
+            value={selectedUnitFilter}
+            onChange={(e) => setSelectedUnitFilter(e.target.value)}
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none bg-white text-slate-700"
+          >
+            <option value="all">Semua Unit Kerja</option>
+            {units.map((u) => (
+              <option key={u.id} value={u.nama}>{u.nama}</option>
+            ))}
+          </select>
+        </div>
+        <div className="w-full md:w-48">
+          <select
             value={selectedRoleFilter}
             onChange={(e) => setSelectedRoleFilter(e.target.value)}
             className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none bg-white text-slate-700"
@@ -250,7 +286,8 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
           <p className="text-xs text-slate-500 italic">Tidak ada pegawai yang sesuai dengan filter pencarian.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-100">
+        <>
+          <div className="overflow-x-auto rounded-2xl border border-slate-100">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100 uppercase tracking-wider text-[10px]">
@@ -263,7 +300,7 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
-              {filteredUsers.map((u) => (
+              {currentUsers.map((u) => (
                 <tr key={u.nip} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-4 py-3 font-mono font-bold text-slate-600">{u.nip}</td>
                   <td className="px-4 py-3">
@@ -302,6 +339,83 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
             </tbody>
           </table>
         </div>
+
+        {/* Pagination controls */}
+        {filteredUsers.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between border-t border-slate-100 pt-4 gap-4">
+            <div className="flex items-center space-x-4">
+              <div className="text-xs text-slate-500">
+                Menampilkan <span className="font-semibold text-slate-800">{filteredUsers.length === 0 ? 0 : indexOfFirstItem + 1}</span> - <span className="font-semibold text-slate-800">{Math.min(indexOfLastItem, filteredUsers.length)}</span> dari <span className="font-semibold text-slate-800">{filteredUsers.length}</span> data pegawai
+              </div>
+              <div className="hidden sm:flex items-center space-x-1 text-xs text-slate-500">
+                <span className="text-slate-400">|</span>
+                <span className="ml-2">Baris per halaman:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="px-1.5 py-0.5 border border-slate-200 rounded-md bg-white text-slate-700 focus:outline-none text-[11px]"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+            </div>
+            
+            {totalPages > 1 && (
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer"
+                >
+                  Sebelumnya
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                  if (
+                    totalPages > 6 &&
+                    page !== 1 &&
+                    page !== totalPages &&
+                    Math.abs(page - currentPage) > 1
+                  ) {
+                    if (page === 2 && currentPage > 3) {
+                      return <span key={page} className="px-1 text-slate-400">...</span>;
+                    }
+                    if (page === totalPages - 1 && currentPage < totalPages - 2) {
+                      return <span key={page} className="px-1 text-slate-400">...</span>;
+                    }
+                    return null;
+                  }
+                  return (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`w-8 h-8 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center ${
+                        currentPage === page
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/10'
+                          : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer"
+                >
+                  Selanjutnya
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        </>
       )}
 
       {/* Save / Edit user modal dialog */}

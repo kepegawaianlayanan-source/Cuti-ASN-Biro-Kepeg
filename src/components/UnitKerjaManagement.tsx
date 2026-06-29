@@ -14,6 +14,15 @@ export default function UnitKerjaManagement({ showToast, onUnitsChange }: UnitKe
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Reset page on filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCategoryFilter]);
   
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -124,6 +133,11 @@ export default function UnitKerjaManagement({ showToast, onUnitsChange }: UnitKe
     return matchesSearch && matchesCategory;
   });
 
+  const totalPages = Math.ceil(filteredUnits.length / itemsPerPage);
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentUnits = filteredUnits.slice(indexOfFirstItem, indexOfLastItem);
+
   const getCategoryBadge = (kat: UnitKategori) => {
     switch (kat) {
       case 'Kantor Pusat':
@@ -197,7 +211,8 @@ export default function UnitKerjaManagement({ showToast, onUnitsChange }: UnitKe
           <p className="text-xs text-slate-500 italic">Tidak ada data unit kerja ditemukan.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-100">
+        <>
+          <div className="overflow-x-auto rounded-2xl border border-slate-100">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100 uppercase tracking-wider text-[10px]">
@@ -208,9 +223,9 @@ export default function UnitKerjaManagement({ showToast, onUnitsChange }: UnitKe
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
-              {filteredUnits.map((unit, idx) => (
+              {currentUnits.map((unit, idx) => (
                 <tr key={unit.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-5 py-3 text-center font-mono text-slate-400">{idx + 1}</td>
+                  <td className="px-5 py-3 text-center font-mono text-slate-400">{indexOfFirstItem + idx + 1}</td>
                   <td className="px-5 py-3 font-medium text-slate-900">{unit.nama}</td>
                   <td className="px-5 py-3 text-center">
                     {getCategoryBadge(unit.kategori as UnitKategori)}
@@ -238,6 +253,83 @@ export default function UnitKerjaManagement({ showToast, onUnitsChange }: UnitKe
             </tbody>
           </table>
         </div>
+
+        {/* Pagination controls */}
+        {filteredUnits.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between border-t border-slate-100 pt-4 gap-4">
+            <div className="flex items-center space-x-4">
+              <div className="text-xs text-slate-500">
+                Menampilkan <span className="font-semibold text-slate-800">{filteredUnits.length === 0 ? 0 : indexOfFirstItem + 1}</span> - <span className="font-semibold text-slate-800">{Math.min(indexOfLastItem, filteredUnits.length)}</span> dari <span className="font-semibold text-slate-800">{filteredUnits.length}</span> data unit kerja
+              </div>
+              <div className="hidden sm:flex items-center space-x-1 text-xs text-slate-500">
+                <span className="text-slate-400">|</span>
+                <span className="ml-2">Baris per halaman:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="px-1.5 py-0.5 border border-slate-200 rounded-md bg-white text-slate-700 focus:outline-none text-[11px]"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+            </div>
+            
+            {totalPages > 1 && (
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer"
+                >
+                  Sebelumnya
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                  if (
+                    totalPages > 6 &&
+                    page !== 1 &&
+                    page !== totalPages &&
+                    Math.abs(page - currentPage) > 1
+                  ) {
+                    if (page === 2 && currentPage > 3) {
+                      return <span key={page} className="px-1 text-slate-400">...</span>;
+                    }
+                    if (page === totalPages - 1 && currentPage < totalPages - 2) {
+                      return <span key={page} className="px-1 text-slate-400">...</span>;
+                    }
+                    return null;
+                  }
+                  return (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`w-8 h-8 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center ${
+                        currentPage === page
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/10'
+                          : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer"
+                >
+                  Selanjutnya
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        </>
       )}
 
       {/* CRUD Modal dialog */}
