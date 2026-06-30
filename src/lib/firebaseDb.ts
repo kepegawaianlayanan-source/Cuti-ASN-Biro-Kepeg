@@ -78,47 +78,26 @@ const SEED_UNITS: UnitKerja[] = [
   { "id": "8", "nama": "Pusat - Biro Kepegawaian, Organisasi, dan Tata Laksana", "kategori": "Kantor Pusat" }
 ];
 
-// Seed databases if empty
+// Seed data if empty or underpopulated (disabled on user request to use real-time Firestore data)
 export async function verifyAndSeedDb(): Promise<void> {
-  try {
-    const usersSnap = await getDocs(collection(db, "users"));
-    if (usersSnap.empty) {
-      console.log("Firestore 'users' is empty client-side. Initializing seed data...");
-      for (const u of SEED_USERS) {
-        await setDoc(doc(db, "users", u.nip), u);
-      }
-    }
-
-    const unitsSnap = await getDocs(collection(db, "units"));
-    if (unitsSnap.empty) {
-      console.log("Firestore 'units' is empty client-side. Initializing seed data...");
-      for (const un of SEED_UNITS) {
-        await setDoc(doc(db, "units", un.id), un);
-      }
-    }
-  } catch (err) {
-    console.error("Error auto-seeding client-side:", err);
-  }
+  // Disabled auto-seeding to keep Firestore database clean and real-time
 }
 
 // ==========================================
 // 1. Users DB Functions
 // ==========================================
 export async function getUsersDirect(): Promise<User[]> {
-  await verifyAndSeedDb();
   const snap = await getDocs(collection(db, "users"));
   return snap.docs.map(d => d.data() as User);
 }
 
 export async function getUserDirect(nip: string): Promise<User | null> {
-  await verifyAndSeedDb();
   const dRef = doc(db, "users", String(nip));
   const snap = await getDoc(dRef);
   if (snap.exists()) {
     return snap.data() as User;
   }
-  // Fallback to local SEED list
-  return SEED_USERS.find(u => u.nip === String(nip)) || null;
+  return null;
 }
 
 export async function saveUserDirect(user: User): Promise<void> {
