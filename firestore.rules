@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Standard unauthenticated read/write access for full-stack server proxy coordination.
+    // Ensure you review and restrict client-side rules if you ever expose direct client-side writes.
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

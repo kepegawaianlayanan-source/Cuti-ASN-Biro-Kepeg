@@ -7,6 +7,17 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
+import { initializeApp } from "firebase/app";
+import { 
+  getFirestore, 
+  collection, 
+  doc, 
+  getDocs, 
+  getDoc, 
+  setDoc, 
+  deleteDoc, 
+  updateDoc 
+} from "firebase/firestore";
 import { User, LeaveRequest, Notification, LeaveStatus, LeaveType, UnitKerja } from "./src/types";
 
 // Setup standard paths
@@ -69,7 +80,7 @@ const SEED_USERS: User[] = [
   {"nip": "199311212025061001", "nama": "CHAERUL JERY SETIADI A.Md.", "role": "pegawai", "unit_kerja": "Pusat - Biro Kepegawaian, Organisasi, dan Tata Laksana", "jabatan": "Pranata Sumber Daya Manusia Aparatur Terampil", "eselon": "Non-Eselon", "password": "basarnas123", "pangkatGol": "Pengatur (II/c)"}
 ];
 
-// Helper to read JSON database safely
+/// Helper to read JSON database safely (as fallback)
 function readDb<T>(filePath: string, defaultData: T): T {
   try {
     if (fs.existsSync(filePath)) {
@@ -84,7 +95,7 @@ function readDb<T>(filePath: string, defaultData: T): T {
   return defaultData;
 }
 
-// Helper to write JSON database safely
+// Helper to write JSON database safely (as fallback)
 function writeDb<T>(filePath: string, data: T): void {
   try {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
@@ -104,11 +115,257 @@ const SEED_UNITS: UnitKerja[] = [
   { "id": "8", "nama": "Pusat - Biro Kepegawaian, Organisasi, dan Tata Laksana", "kategori": "Kantor Pusat" }
 ];
 
-// Load databases
-let users: User[] = readDb<User[]>(USERS_FILE, SEED_USERS);
-let leaves: LeaveRequest[] = readDb<LeaveRequest[]>(LEAVES_FILE, []);
-let notifications: Notification[] = readDb<Notification[]>(NOTIFICATIONS_FILE, []);
-let units: UnitKerja[] = readDb<UnitKerja[]>(UNITS_FILE, SEED_UNITS);
+// Initialize Firebase
+const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
+let db: any = null;
+let isFirebaseEnabled = false;
+
+if (fs.existsSync(firebaseConfigPath)) {
+  try {
+    const config = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf-8"));
+    const app = initializeApp(config);
+    db = getFirestore(app, config.firestoreDatabaseId || "(default)");
+    isFirebaseEnabled = true;
+    console.log("Firebase Firestore initialized successfully with database ID:", config.firestoreDatabaseId);
+  } catch (err) {
+    console.error("Failed to initialize Firebase:", err);
+  }
+}
+
+// Fetch all users
+async function getAllUsers(): Promise<User[]> {
+  if (!isFirebaseEnabled) return readDb<User[]>(USERS_FILE, SEED_USERS);
+  try {
+    const snapshot = await getDocs(collection(db, "users"));
+    return snapshot.docs.map(doc => doc.data() as User);
+  } catch (err) {
+    console.error("Error fetching users from Firebase:", err);
+    return readDb<User[]>(USERS_FILE, SEED_USERS);
+  }
+}
+
+// Fetch single user
+async function getUser(nip: string): Promise<User | null> {
+  if (!isFirebaseEnabled) {
+    const uList = readDb<User[]>(USERS_FILE, SEED_USERS);
+    return uList.find(u => u.nip === String(nip)) || null;
+  }
+  try {
+    const docRef = doc(db, "users", String(nip));
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data() as User;
+    }
+    // Fallback if not found in Firestore yet
+    const uList = readDb<User[]>(USERS_FILE, SEED_USERS);
+    return uList.find(u => u.nip === String(nip)) || null;
+  } catch (err) {
+    console.error("Error fetching user from Firebase:", err);
+    const uList = readDb<User[]>(USERS_FILE, SEED_USERS);
+    return uList.find(u => u.nip === String(nip)) || null;
+  }
+}
+
+// Save or update user
+async function saveUser(user: User): Promise<void> {
+  // Always mirror write to local fallback
+  const uList = readDb<User[]>(USERS_FILE, SEED_USERS);
+  const idx = uList.findIndex(u => u.nip === user.nip);
+  if (idx !== -1) uList[idx] = user;
+  else uList.push(user);
+  writeDb(USERS_FILE, uList);
+
+  if (!isFirebaseEnabled) return;
+  try {
+    await setDoc(doc(db, "users", user.nip), user);
+  } catch (err) {
+    console.error("Error saving user to Firebase:", err);
+  }
+}
+
+// Delete user
+async function deleteUserDb(nip: string): Promise<void> {
+  // Always mirror write to local fallback
+  let uList = readDb<User[]>(USERS_FILE, SEED_USERS);
+  uList = uList.filter(u => u.nip !== nip);
+  writeDb(USERS_FILE, uList);
+
+  if (!isFirebaseEnabled) return;
+  try {
+    await deleteDoc(doc(db, "users", nip));
+  } catch (err) {
+    console.error("Error deleting user from Firebase:", err);
+  }
+}
+
+// Fetch all units
+async function getAllUnits(): Promise<UnitKerja[]> {
+  if (!isFirebaseEnabled) return readDb<UnitKerja[]>(UNITS_FILE, SEED_UNITS);
+  try {
+    const snapshot = await getDocs(collection(db, "units"));
+    return snapshot.docs.map(doc => doc.data() as UnitKerja);
+  } catch (err) {
+    console.error("Error fetching units from Firebase:", err);
+    return readDb<UnitKerja[]>(UNITS_FILE, SEED_UNITS);
+  }
+}
+
+// Save or update unit
+async function saveUnit(unit: UnitKerja): Promise<void> {
+  // Always mirror write to local fallback
+  const uList = readDb<UnitKerja[]>(UNITS_FILE, SEED_UNITS);
+  const idx = uList.findIndex(u => u.id === unit.id);
+  if (idx !== -1) uList[idx] = unit;
+  else uList.push(unit);
+  writeDb(UNITS_FILE, uList);
+
+  if (!isFirebaseEnabled) return;
+  try {
+    await setDoc(doc(db, "units", unit.id), unit);
+  } catch (err) {
+    console.error("Error saving unit to Firebase:", err);
+  }
+}
+
+// Delete unit
+async function deleteUnitDb(id: string): Promise<void> {
+  // Always mirror write to local fallback
+  let uList = readDb<UnitKerja[]>(UNITS_FILE, SEED_UNITS);
+  uList = uList.filter(u => u.id !== id);
+  writeDb(UNITS_FILE, uList);
+
+  if (!isFirebaseEnabled) return;
+  try {
+    await deleteDoc(doc(db, "units", id));
+  } catch (err) {
+    console.error("Error deleting unit from Firebase:", err);
+  }
+}
+
+// Fetch all leave requests
+async function getAllLeaves(): Promise<LeaveRequest[]> {
+  if (!isFirebaseEnabled) return readDb<LeaveRequest[]>(LEAVES_FILE, []);
+  try {
+    const snapshot = await getDocs(collection(db, "leaves"));
+    const list = snapshot.docs.map(doc => doc.data() as LeaveRequest);
+    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  } catch (err) {
+    console.error("Error fetching leaves from Firebase:", err);
+    return readDb<LeaveRequest[]>(LEAVES_FILE, []);
+  }
+}
+
+// Fetch single leave request
+async function getLeave(id: string): Promise<LeaveRequest | null> {
+  if (!isFirebaseEnabled) {
+    const list = readDb<LeaveRequest[]>(LEAVES_FILE, []);
+    return list.find(l => l.id === id) || null;
+  }
+  try {
+    const docSnap = await getDoc(doc(db, "leaves", id));
+    if (docSnap.exists()) {
+      return docSnap.data() as LeaveRequest;
+    }
+    // Fallback
+    const list = readDb<LeaveRequest[]>(LEAVES_FILE, []);
+    return list.find(l => l.id === id) || null;
+  } catch (err) {
+    console.error("Error fetching leave from Firebase:", err);
+    const list = readDb<LeaveRequest[]>(LEAVES_FILE, []);
+    return list.find(l => l.id === id) || null;
+  }
+}
+
+// Save or update leave request
+async function saveLeave(leave: LeaveRequest): Promise<void> {
+  // Always mirror write to local fallback
+  const list = readDb<LeaveRequest[]>(LEAVES_FILE, []);
+  const idx = list.findIndex(l => l.id === leave.id);
+  if (idx !== -1) list[idx] = leave;
+  else list.unshift(leave);
+  writeDb(LEAVES_FILE, list);
+
+  if (!isFirebaseEnabled) return;
+  try {
+    await setDoc(doc(db, "leaves", leave.id), leave);
+  } catch (err) {
+    console.error("Error saving leave to Firebase:", err);
+  }
+}
+
+// Delete leave request
+async function deleteLeaveDb(id: string): Promise<void> {
+  // Always mirror write to local fallback
+  let list = readDb<LeaveRequest[]>(LEAVES_FILE, []);
+  list = list.filter(l => l.id !== id);
+  writeDb(LEAVES_FILE, list);
+
+  if (!isFirebaseEnabled) return;
+  try {
+    await deleteDoc(doc(db, "leaves", id));
+  } catch (err) {
+    console.error("Error deleting leave from Firebase:", err);
+  }
+}
+
+// Fetch notifications for NIP
+async function getNotificationsForNip(nip: string): Promise<Notification[]> {
+  if (!isFirebaseEnabled) {
+    const list = readDb<Notification[]>(NOTIFICATIONS_FILE, []);
+    return list.filter(n => n.nip === String(nip));
+  }
+  try {
+    const snapshot = await getDocs(collection(db, "notifications"));
+    const list = snapshot.docs.map(doc => doc.data() as Notification);
+    return list
+      .filter(n => n.nip === String(nip))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  } catch (err) {
+    console.error("Error fetching notifications from Firebase:", err);
+    const list = readDb<Notification[]>(NOTIFICATIONS_FILE, []);
+    return list.filter(n => n.nip === String(nip));
+  }
+}
+
+// Save notification
+async function saveNotificationDb(notif: Notification): Promise<void> {
+  // Always mirror write to local fallback
+  const list = readDb<Notification[]>(NOTIFICATIONS_FILE, []);
+  list.unshift(notif);
+  writeDb(NOTIFICATIONS_FILE, list);
+
+  if (!isFirebaseEnabled) return;
+  try {
+    await setDoc(doc(db, "notifications", notif.id), notif);
+  } catch (err) {
+    console.error("Error saving notification to Firebase:", err);
+  }
+}
+
+// Mark notifications as read
+async function markAllNotificationsAsRead(nip: string): Promise<void> {
+  // Always mirror write to local fallback
+  const list = readDb<Notification[]>(NOTIFICATIONS_FILE, []);
+  list.forEach(n => {
+    if (n.nip === String(nip)) {
+      n.isRead = true;
+    }
+  });
+  writeDb(NOTIFICATIONS_FILE, list);
+
+  if (!isFirebaseEnabled) return;
+  try {
+    const snapshot = await getDocs(collection(db, "notifications"));
+    for (const d of snapshot.docs) {
+      const n = d.data() as Notification;
+      if (n.nip === String(nip) && !n.isRead) {
+        await updateDoc(doc(db, "notifications", n.id), { isRead: true });
+      }
+    }
+  } catch (err) {
+    console.error("Error marking notifications as read in Firebase:", err);
+  }
+}
 
 // Real-time SSE Connection Clients
 interface SSEClient {
@@ -119,18 +376,17 @@ interface SSEClient {
 let sseClients: SSEClient[] = [];
 
 // Helper to trigger and store notifications
-function sendNotification(nip: string, title: string, message: string) {
+async function sendNotification(nip: string, title: string, message: string) {
   const newNotification: Notification = {
     id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
-    nip,
+    nip: String(nip),
     title,
     message,
     isRead: false,
     createdAt: new Date().toISOString()
   };
   
-  notifications.unshift(newNotification);
-  writeDb(NOTIFICATIONS_FILE, notifications);
+  await saveNotificationDb(newNotification);
 
   // Broadcast to active SSE clients for this user NIP
   sseClients.forEach((client) => {
@@ -148,6 +404,30 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Seed Firestore if empty on startup
+  if (isFirebaseEnabled && db) {
+    try {
+      const usersSnap = await getDocs(collection(db, "users"));
+      if (usersSnap.empty) {
+        console.log("Firestore 'users' collection is empty. Seeding SEED_USERS...");
+        for (const user of SEED_USERS) {
+          await setDoc(doc(db, "users", user.nip), user);
+        }
+        console.log("Successfully seeded users to Firestore.");
+      }
+      const unitsSnap = await getDocs(collection(db, "units"));
+      if (unitsSnap.empty) {
+        console.log("Firestore 'units' collection is empty. Seeding SEED_UNITS...");
+        for (const unit of SEED_UNITS) {
+          await setDoc(doc(db, "units", unit.id), unit);
+        }
+        console.log("Successfully seeded units to Firestore.");
+      }
+    } catch (e) {
+      console.error("Error seeding Firestore on startup:", e);
+    }
+  }
+
   // Middleware for body parsing
   app.use(express.json());
 
@@ -156,22 +436,26 @@ async function startServer() {
   // ----------------------------------------------------
 
   // 1. Health check
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", usersCount: users.length, leavesCount: leaves.length });
+  app.get("/api/health", async (req, res) => {
+    const uList = await getAllUsers();
+    const lList = await getAllLeaves();
+    res.json({ status: "ok", usersCount: uList.length, leavesCount: lList.length });
   });
 
   // 2. Fetch all users (NIP and metadata, passwords hidden for safety)
-  app.get("/api/users", (req, res) => {
-    const safeUsers = users.map(({ password, ...rest }) => rest);
+  app.get("/api/users", async (req, res) => {
+    const uList = await getAllUsers();
+    const safeUsers = uList.map(({ password, ...rest }) => rest);
     res.json(safeUsers);
   });
 
   // 2b. Unit Kerja CRUD Endpoints
-  app.get("/api/units", (req, res) => {
-    res.json(units);
+  app.get("/api/units", async (req, res) => {
+    const unList = await getAllUnits();
+    res.json(unList);
   });
 
-  app.post("/api/units", (req, res) => {
+  app.post("/api/units", async (req, res) => {
     const { nama, kategori } = req.body;
     if (!nama) {
       return res.status(400).json({ error: "Nama unit kerja harus diisi." });
@@ -181,50 +465,49 @@ async function startServer() {
       nama,
       kategori: kategori || 'Kantor Pusat'
     };
-    units.push(newUnit);
-    writeDb(UNITS_FILE, units);
+    await saveUnit(newUnit);
     res.status(201).json({ success: true, unit: newUnit, message: "Unit kerja berhasil ditambahkan." });
   });
 
-  app.put("/api/units/:id", (req, res) => {
+  app.put("/api/units/:id", async (req, res) => {
     const { id } = req.params;
     const { nama, kategori } = req.body;
     if (!nama) {
       return res.status(400).json({ error: "Nama unit kerja harus diisi." });
     }
-    const index = units.findIndex(u => u.id === id);
-    if (index === -1) {
+    const unList = await getAllUnits();
+    const existing = unList.find(u => u.id === id);
+    if (!existing) {
       return res.status(404).json({ error: "Unit kerja tidak ditemukan." });
     }
-    units[index].nama = nama;
+    existing.nama = nama;
     if (kategori) {
-      units[index].kategori = kategori;
+      existing.kategori = kategori;
     }
-    writeDb(UNITS_FILE, units);
-    res.json({ success: true, unit: units[index], message: "Unit kerja berhasil diperbarui." });
+    await saveUnit(existing);
+    res.json({ success: true, unit: existing, message: "Unit kerja berhasil diperbarui." });
   });
 
-  app.delete("/api/units/:id", (req, res) => {
+  app.delete("/api/units/:id", async (req, res) => {
     const { id } = req.params;
-    const index = units.findIndex(u => u.id === id);
-    if (index === -1) {
+    const unList = await getAllUnits();
+    const existing = unList.find(u => u.id === id);
+    if (!existing) {
       return res.status(404).json({ error: "Unit kerja tidak ditemukan." });
     }
-    const deletedUnit = units.splice(index, 1)[0];
-    writeDb(UNITS_FILE, units);
-    res.json({ success: true, unit: deletedUnit, message: "Unit kerja berhasil dihapus." });
+    await deleteUnitDb(id);
+    res.json({ success: true, unit: existing, message: "Unit kerja berhasil dihapus." });
   });
 
   // 2c. User Management Admin Endpoints
-  app.post("/api/admin/users", (req, res) => {
+  app.post("/api/admin/users", async (req, res) => {
     const { nip, nama, role, unit_kerja, jabatan, eselon, pangkatGol, password } = req.body;
     if (!nip || !nama || !role || !unit_kerja || !jabatan) {
       return res.status(400).json({ error: "Kolom NIP, Nama, Role, Unit Kerja, dan Jabatan wajib diisi." });
     }
 
-    // Check if NIP already exists
-    const exists = users.some(u => u.nip === String(nip));
-    if (exists) {
+    const existing = await getUser(String(nip));
+    if (existing) {
       return res.status(400).json({ error: "Pegawai dengan NIP ini sudah terdaftar." });
     }
 
@@ -240,64 +523,61 @@ async function startServer() {
       signature: ""
     };
 
-    users.push(newUser);
-    writeDb(USERS_FILE, users);
+    await saveUser(newUser);
 
     const { password: _, ...safeUser } = newUser;
     res.status(201).json({ success: true, user: safeUser, message: "Pegawai berhasil ditambahkan." });
   });
 
-  app.put("/api/admin/users/:nip", (req, res) => {
+  app.put("/api/admin/users/:nip", async (req, res) => {
     const { nip } = req.params;
     const { nama, role, unit_kerja, jabatan, eselon, pangkatGol, password } = req.body;
 
-    const index = users.findIndex(u => u.nip === nip);
-    if (index === -1) {
+    const user = await getUser(nip);
+    if (!user) {
       return res.status(404).json({ error: "Pegawai tidak ditemukan." });
     }
 
-    if (nama) users[index].nama = nama;
-    if (role) users[index].role = role;
-    if (unit_kerja) users[index].unit_kerja = unit_kerja;
-    if (jabatan) users[index].jabatan = jabatan;
-    if (eselon !== undefined) users[index].eselon = eselon;
-    if (pangkatGol !== undefined) users[index].pangkatGol = pangkatGol;
-    if (password) users[index].password = password;
+    if (nama) user.nama = nama;
+    if (role) user.role = role;
+    if (unit_kerja) user.unit_kerja = unit_kerja;
+    if (jabatan) user.jabatan = jabatan;
+    if (eselon !== undefined) user.eselon = eselon;
+    if (pangkatGol !== undefined) user.pangkatGol = pangkatGol;
+    if (password) user.password = password;
 
-    writeDb(USERS_FILE, users);
+    await saveUser(user);
 
-    const { password: _, ...safeUser } = users[index];
+    const { password: _, ...safeUser } = user;
     res.json({ success: true, user: safeUser, message: "Data pegawai berhasil diperbarui." });
   });
 
-  app.delete("/api/admin/users/:nip", (req, res) => {
+  app.delete("/api/admin/users/:nip", async (req, res) => {
     const { nip } = req.params;
-    const index = users.findIndex(u => u.nip === nip);
-    if (index === -1) {
+    const user = await getUser(nip);
+    if (!user) {
       return res.status(404).json({ error: "Pegawai tidak ditemukan." });
     }
 
-    const deletedUser = users.splice(index, 1)[0];
-    writeDb(USERS_FILE, users);
+    await deleteUserDb(nip);
 
-    const { password: _, ...safeUser } = deletedUser;
+    const { password: _, ...safeUser } = user;
     res.json({ success: true, user: safeUser, message: "Pegawai berhasil dihapus dari sistem." });
   });
 
   // 2d. Leave Management Admin Delete Endpoint
-  app.delete("/api/admin/leave/:id", (req, res) => {
+  app.delete("/api/admin/leave/:id", async (req, res) => {
     const { id } = req.params;
-    const index = leaves.findIndex(l => l.id === id);
-    if (index === -1) {
+    const leave = await getLeave(id);
+    if (!leave) {
       return res.status(404).json({ error: "Pengajuan cuti tidak ditemukan." });
     }
-    const deletedLeave = leaves.splice(index, 1)[0];
-    writeDb(LEAVES_FILE, leaves);
-    res.json({ success: true, leave: deletedLeave, message: "Pengajuan cuti berhasil dihapus dari sistem." });
+    await deleteLeaveDb(id);
+    res.json({ success: true, leave, message: "Pengajuan cuti berhasil dihapus dari sistem." });
   });
 
   // 2e. Leave Management Admin Direct Submit Endpoint
-  app.post("/api/admin/leave/submit", (req, res) => {
+  app.post("/api/admin/leave/submit", async (req, res) => {
     const { 
       nip, 
       jenisCuti, 
@@ -319,17 +599,17 @@ async function startServer() {
       return res.status(400).json({ error: "Formulir pengajuan belum lengkap." });
     }
 
-    const user = users.find(u => u.nip === String(nip));
+    const user = await getUser(String(nip));
     if (!user) {
       return res.status(404).json({ error: "Pegawai pengaju tidak ditemukan." });
     }
 
-    const verifikator = users.find(u => u.nip === String(verifikatorNip));
+    const verifikator = await getUser(String(verifikatorNip));
     if (!verifikator) {
       return res.status(404).json({ error: "Atasan / Verifikator tidak ditemukan." });
     }
 
-    const pimpinan = users.find(u => u.nip === String(pimpinanNip));
+    const pimpinan = await getUser(String(pimpinanNip));
     if (!pimpinan) {
       return res.status(404).json({ error: "Pimpinan yang berwenang tidak ditemukan." });
     }
@@ -386,24 +666,23 @@ async function startServer() {
       createdAt: new Date().toISOString()
     };
 
-    leaves.unshift(newRequest);
-    writeDb(LEAVES_FILE, leaves);
+    await saveLeave(newRequest);
 
     // Send notifications
-    sendNotification(
+    await sendNotification(
       user.nip,
       "Cuti Diinput oleh Admin",
       `Data cuti Anda telah diinput oleh Admin dengan status: ${finalStatus.replace("_", " ")}.`
     );
 
     if (finalStatus === "menunggu_verifikasi") {
-      sendNotification(
+      await sendNotification(
         verifikator.nip,
         "Pengajuan Cuti Baru",
         `${user.nama} memiliki pengajuan cuti baru yang diinput oleh Admin dan memerlukan verifikasi Anda.`
       );
     } else if (finalStatus === "menunggu_pimpinan") {
-      sendNotification(
+      await sendNotification(
         pimpinan.nip,
         "Persetujuan Cuti Baru",
         `${user.nama} memiliki pengajuan cuti baru yang telah diverifikasi dan menunggu persetujuan Anda.`
@@ -414,14 +693,14 @@ async function startServer() {
   });
 
   // 3. Authenticate User
-  app.post("/api/auth/login", (req, res) => {
+  app.post("/api/auth/login", async (req, res) => {
     const { nip, password } = req.body;
     
     if (!nip || !password) {
       return res.status(400).json({ error: "NIP dan Password harus diisi." });
     }
 
-    const user = users.find(u => u.nip === String(nip));
+    const user = await getUser(String(nip));
     
     if (!user || user.password !== password) {
       return res.status(401).json({ error: "NIP atau Password salah." });
@@ -433,52 +712,52 @@ async function startServer() {
   });
 
   // 4. Change Password
-  app.post("/api/auth/change-password", (req, res) => {
+  app.post("/api/auth/change-password", async (req, res) => {
     const { nip, oldPassword, newPassword } = req.body;
 
     if (!nip || !oldPassword || !newPassword) {
       return res.status(400).json({ error: "Semua field harus diisi." });
     }
 
-    const userIndex = users.findIndex(u => u.nip === String(nip));
+    const user = await getUser(String(nip));
     
-    if (userIndex === -1) {
+    if (!user) {
       return res.status(404).json({ error: "Pegawai tidak ditemukan." });
     }
 
-    if (users[userIndex].password !== oldPassword) {
+    if (user.password !== oldPassword) {
       return res.status(400).json({ error: "Password lama salah." });
     }
 
-    users[userIndex].password = newPassword;
-    writeDb(USERS_FILE, users);
+    user.password = newPassword;
+    await saveUser(user);
 
     res.json({ success: true, message: "Password berhasil diubah." });
   });
 
   // 4b. Update Digital Signature
-  app.post("/api/user/update-signature", (req, res) => {
+  app.post("/api/user/update-signature", async (req, res) => {
     const { nip, signature } = req.body;
 
     if (!nip || signature === undefined) {
       return res.status(400).json({ error: "NIP dan signature harus diisi." });
     }
 
-    const userIndex = users.findIndex(u => u.nip === String(nip));
-    if (userIndex === -1) {
+    const user = await getUser(String(nip));
+    if (!user) {
       return res.status(404).json({ error: "Pegawai tidak ditemukan." });
     }
 
-    users[userIndex].signature = signature;
-    writeDb(USERS_FILE, users);
+    user.signature = signature;
+    await saveUser(user);
 
     // Return the updated user info safely
-    const { password: _, ...safeUser } = users[userIndex];
+    const { password: _, ...safeUser } = user;
     res.json({ success: true, user: safeUser, message: "Tanda tangan digital berhasil diperbarui." });
   });
 
   // 5. Submit Leave Request (Pengajuan Cuti)
-  app.post("/api/leave/submit", (req, res) => {
+  app.post("/api/leave/submit", async (req, res) => {
     const { 
       nip, 
       jenisCuti, 
@@ -497,17 +776,17 @@ async function startServer() {
       return res.status(400).json({ error: "Formulir pengajuan belum lengkap." });
     }
 
-    const user = users.find(u => u.nip === String(nip));
+    const user = await getUser(String(nip));
     if (!user) {
       return res.status(404).json({ error: "Pegawai pengaju tidak ditemukan." });
     }
 
-    const verifikator = users.find(u => u.nip === String(verifikatorNip));
+    const verifikator = await getUser(String(verifikatorNip));
     if (!verifikator) {
       return res.status(404).json({ error: "Atasan / Verifikator tidak ditemukan." });
     }
 
-    const pimpinan = users.find(u => u.nip === String(pimpinanNip));
+    const pimpinan = await getUser(String(pimpinanNip));
     if (!pimpinan) {
       return res.status(404).json({ error: "Pimpinan yang berwenang tidak ditemukan." });
     }
@@ -545,18 +824,17 @@ async function startServer() {
       createdAt: new Date().toISOString()
     };
 
-    leaves.unshift(newRequest);
-    writeDb(LEAVES_FILE, leaves);
+    await saveLeave(newRequest);
 
     // Send real-time notification to Verifikator
-    sendNotification(
+    await sendNotification(
       verifikator.nip, 
       "Pengajuan Cuti Baru", 
       `${user.nama} mengajukan cuti ${jenisCuti.replace("_", " ")} selama ${lamaHari} hari mulai tanggal ${tanggalMulai}.`
     );
 
     // Send notification to the submitter as a confirmation
-    sendNotification(
+    await sendNotification(
       user.nip,
       "Pengajuan Cuti Terkirim",
       `Cuti Anda berhasil diajukan dan sedang menunggu verifikasi oleh ${verifikator.nama}.`
@@ -566,7 +844,7 @@ async function startServer() {
   });
 
   // 6. Fetch Leave Requests (Berjenjang: Sesuai NIP / Role)
-  app.get("/api/leave/list", (req, res) => {
+  app.get("/api/leave/list", async (req, res) => {
     const { nip, role } = req.query;
 
     if (!nip || !role) {
@@ -576,46 +854,46 @@ async function startServer() {
     const clientNip = String(nip);
     const clientRole = String(role);
 
-    let filteredLeaves = [...leaves];
+    const leavesList = await getAllLeaves();
+    let filteredLeaves = [...leavesList];
 
     if (clientRole === "pegawai") {
       // Employees only see their own requests
-      filteredLeaves = leaves.filter(l => l.nip === clientNip);
+      filteredLeaves = leavesList.filter(l => l.nip === clientNip);
     } else if (clientRole === "verifikator") {
       // Verifiers see:
       // 1. Requests pending their verifications
       // 2. Their own personal leave requests
       // 3. Requests they already actioned
-      filteredLeaves = leaves.filter(l => l.verifikatorNip === clientNip || l.nip === clientNip);
+      filteredLeaves = leavesList.filter(l => l.verifikatorNip === clientNip || l.nip === clientNip);
     } else if (clientRole === "pimpinan") {
       // Leaders see:
       // 1. Requests that are approved by Verifikator (menunggu_pimpinan) and assigned to them
       // 2. All requests assigned to them for tracking
       // 3. Their own personal leave requests
-      filteredLeaves = leaves.filter(l => l.pimpinanNip === clientNip || l.nip === clientNip);
+      filteredLeaves = leavesList.filter(l => l.pimpinanNip === clientNip || l.nip === clientNip);
     } else if (clientRole === "admin") {
       // Admins see everything for reports
-      filteredLeaves = leaves;
+      filteredLeaves = leavesList;
     }
 
     res.json(filteredLeaves);
   });
 
   // 7. Action on Leave (Approve / Reject / Defer / Changes by Verifier or Leader)
-  app.post("/api/leave/action", (req, res) => {
+  app.post("/api/leave/action", async (req, res) => {
     const { leaveId, actorNip, actorRole, action, notes } = req.body;
 
     if (!leaveId || !actorNip || !actorRole || !action) {
       return res.status(400).json({ error: "Informasi action kurang lengkap." });
     }
 
-    const leaveIndex = leaves.findIndex(l => l.id === leaveId);
-    if (leaveIndex === -1) {
+    const leave = await getLeave(leaveId);
+    if (!leave) {
       return res.status(404).json({ error: "Pengajuan cuti tidak ditemukan." });
     }
 
-    const leave = leaves[leaveIndex];
-    const actor = users.find(u => u.nip === String(actorNip));
+    const actor = await getUser(String(actorNip));
     if (!actor) {
       return res.status(404).json({ error: "Pelaku persetujuan tidak ditemukan." });
     }
@@ -640,14 +918,14 @@ async function startServer() {
         leave.status = "menunggu_pimpinan";
         
         // Notify pimpinan
-        sendNotification(
+        await sendNotification(
           leave.pimpinanNip!,
           "Verifikasi Cuti Selesai",
-          `Pengajuan cuti ${leave.nama} telah diverifikasi oleh ${actor.nama} dan menunggu persetujuan Anda.`
+          `Pengajuan cuti ${leave.nama} telah diverifikasi oleh ${actor.nama} and menunggu persetujuan Anda.`
         );
 
         // Notify pegawai
-        sendNotification(
+        await sendNotification(
           leave.nip,
           "Pengajuan Cuti Diverifikasi",
           `Cuti Anda telah disetujui/diverifikasi oleh Atasan ${actor.nama}. Sekarang menunggu persetujuan Pimpinan ${leave.pimpinanNama}.`
@@ -662,7 +940,7 @@ async function startServer() {
         leave.status = statusMap[action] || "ditolak";
 
         // Notify pegawai
-        sendNotification(
+        await sendNotification(
           leave.nip,
           `Pengajuan Cuti ${action.toUpperCase()}`,
           `Pengajuan cuti Anda telah ditandai sebagai '${action}' oleh Atasan ${actor.nama} dengan catatan: "${notes || '-'}"`
@@ -689,14 +967,14 @@ async function startServer() {
       leave.status = statusMap[action] || "ditolak";
 
       // Notify pegawai
-      sendNotification(
+      await sendNotification(
         leave.nip,
         `Keputusan Final Cuti: ${action.toUpperCase()}`,
         `Pengajuan cuti Anda telah '${action}' oleh Pimpinan ${actor.nama}. Catatan: "${notes || '-'}"`
       );
 
       // Notify verifikator
-      sendNotification(
+      await sendNotification(
         leave.verifikatorNip!,
         "Keputusan Final Cuti",
         `Cuti atas nama ${leave.nama} yang Anda verifikasi telah '${action}' oleh Pimpinan ${actor.nama}.`
@@ -705,34 +983,28 @@ async function startServer() {
       return res.status(403).json({ error: "Role Anda tidak berwenang melakukan action ini." });
     }
 
-    writeDb(LEAVES_FILE, leaves);
+    await saveLeave(leave);
     res.json({ success: true, leaveRequest: leave });
   });
 
   // 8. Fetch Notifications
-  app.get("/api/notifications", (req, res) => {
+  app.get("/api/notifications", async (req, res) => {
     const { nip } = req.query;
     if (!nip) {
       return res.status(400).json({ error: "NIP diperlukan." });
     }
-    const userNotifs = notifications.filter(n => n.nip === String(nip));
+    const userNotifs = await getNotificationsForNip(String(nip));
     res.json(userNotifs);
   });
 
   // 9. Mark notifications as read
-  app.post("/api/notifications/read", (req, res) => {
+  app.post("/api/notifications/read", async (req, res) => {
     const { nip } = req.body;
     if (!nip) {
       return res.status(400).json({ error: "NIP diperlukan." });
     }
 
-    notifications.forEach(n => {
-      if (n.nip === String(nip)) {
-        n.isRead = true;
-      }
-    });
-
-    writeDb(NOTIFICATIONS_FILE, notifications);
+    await markAllNotificationsAsRead(String(nip));
     res.json({ success: true });
   });
 
@@ -767,30 +1039,31 @@ async function startServer() {
   });
 
   // 11. Generate Stats for Dashboard Report
-  app.get("/api/reports/stats", (req, res) => {
+  app.get("/api/reports/stats", async (req, res) => {
+    const leavesList = await getAllLeaves();
     const stats = {
-      totalLeaves: leaves.length,
-      tahunan: leaves.filter(l => l.jenisCuti === "tahunan").length,
-      besar: leaves.filter(l => l.jenisCuti === "besar").length,
-      sakit: leaves.filter(l => l.jenisCuti === "sakit").length,
-      melahirkan: leaves.filter(l => l.jenisCuti === "melahirkan").length,
-      alasanPenting: leaves.filter(l => l.jenisCuti === "alasan_penting").length,
-      luarTanggungan: leaves.filter(l => l.jenisCuti === "luar_tanggungan").length,
+      totalLeaves: leavesList.length,
+      tahunan: leavesList.filter(l => l.jenisCuti === "tahunan").length,
+      besar: leavesList.filter(l => l.jenisCuti === "besar").length,
+      sakit: leavesList.filter(l => l.jenisCuti === "sakit").length,
+      melahirkan: leavesList.filter(l => l.jenisCuti === "melahirkan").length,
+      alasanPenting: leavesList.filter(l => l.jenisCuti === "alasan_penting").length,
+      luarTanggungan: leavesList.filter(l => l.jenisCuti === "luar_tanggungan").length,
       
-      disetujui: leaves.filter(l => l.status === "disetujui").length,
-      ditolak: leaves.filter(l => l.status === "ditolak").length,
-      ditangguhkan: leaves.filter(l => l.status === "ditangguhkan").length,
-      perubahan: leaves.filter(l => l.status === "perubahan").length,
-      menungguVerifikasi: leaves.filter(l => l.status === "menunggu_verifikasi").length,
-      menungguPimpinan: leaves.filter(l => l.status === "menunggu_pimpinan").length,
+      disetujui: leavesList.filter(l => l.status === "disetujui").length,
+      ditolak: leavesList.filter(l => l.status === "ditolak").length,
+      ditangguhkan: leavesList.filter(l => l.status === "ditangguhkan").length,
+      perubahan: leavesList.filter(l => l.status === "perubahan").length,
+      menungguVerifikasi: leavesList.filter(l => l.status === "menunggu_verifikasi").length,
+      menungguPimpinan: leavesList.filter(l => l.status === "menunggu_pimpinan").length,
     };
     res.json(stats);
   });
 
   // 11b. Public Verification Endpoint for QR Code scans
-  app.get("/api/leave/verify/:id", (req, res) => {
+  app.get("/api/leave/verify/:id", async (req, res) => {
     const { id } = req.params;
-    const leave = leaves.find(l => l.id === id);
+    const leave = await getLeave(id);
     if (!leave) {
       return res.status(404).json({ error: "Dokumen cuti tidak ditemukan." });
     }
@@ -798,17 +1071,54 @@ async function startServer() {
   });
 
   // 12. Reset Database (Useful for Demo / Admin purposes)
-  app.post("/api/admin/reset", (req, res) => {
+  app.post("/api/admin/reset", async (req, res) => {
     const { key } = req.body;
     if (key === "basarnas_demo_reset") {
-      users = JSON.parse(JSON.stringify(SEED_USERS));
-      units = JSON.parse(JSON.stringify(SEED_UNITS));
-      leaves = [];
-      notifications = [];
-      writeDb(USERS_FILE, users);
-      writeDb(UNITS_FILE, units);
-      writeDb(LEAVES_FILE, leaves);
-      writeDb(NOTIFICATIONS_FILE, notifications);
+      if (isFirebaseEnabled && db) {
+        try {
+          // Clear and seed Firestore
+          const usersCol = collection(db, "users");
+          const usersSnap = await getDocs(usersCol);
+          for (const d of usersSnap.docs) {
+            await deleteDoc(doc(db, "users", d.id));
+          }
+          for (const user of SEED_USERS) {
+            await setDoc(doc(db, "users", user.nip), user);
+          }
+
+          const unitsCol = collection(db, "units");
+          const unitsSnap = await getDocs(unitsCol);
+          for (const d of unitsSnap.docs) {
+            await deleteDoc(doc(db, "units", d.id));
+          }
+          for (const unit of SEED_UNITS) {
+            await setDoc(doc(db, "units", unit.id), unit);
+          }
+
+          const leavesCol = collection(db, "leaves");
+          const leavesSnap = await getDocs(leavesCol);
+          for (const d of leavesSnap.docs) {
+            await deleteDoc(doc(db, "leaves", d.id));
+          }
+
+          const notifsCol = collection(db, "notifications");
+          const notifsSnap = await getDocs(notifsCol);
+          for (const d of notifsSnap.docs) {
+            await deleteDoc(doc(db, "notifications", d.id));
+          }
+
+          console.log("Firestore successfully reset!");
+        } catch (err) {
+          console.error("Error resetting Firestore database:", err);
+          return res.status(500).json({ error: "Gagal mereset database cloud." });
+        }
+      } else {
+        // Local files reset
+        writeDb(USERS_FILE, SEED_USERS);
+        writeDb(UNITS_FILE, SEED_UNITS);
+        writeDb(LEAVES_FILE, []);
+        writeDb(NOTIFICATIONS_FILE, []);
+      }
       return res.json({ success: true, message: "Sistem berhasil di-reset ke data bawaan." });
     }
     res.status(403).json({ error: "Kunci otorisasi tidak valid." });

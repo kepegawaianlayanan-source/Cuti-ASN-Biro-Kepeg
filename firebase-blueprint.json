@@ -1,0 +1,87 @@
+{
+  "entities": {
+    "users": {
+      "title": "User",
+      "description": "User entity of Basarnas Pegawai",
+      "type": "object",
+      "properties": {
+        "nip": { "type": "string" },
+        "nama": { "type": "string" },
+        "role": { "type": "string" },
+        "unit_kerja": { "type": "string" },
+        "jabatan": { "type": "string" },
+        "eselon": { "type": "string" },
+        "password": { "type": "string" },
+        "pangkatGol": { "type": "string" },
+        "signature": { "type": "string" }
+      },
+      "required": ["nip", "nama", "role", "unit_kerja", "jabatan", "eselon"]
+    },
+    "units": {
+      "title": "UnitKerja",
+      "description": "Unit Kerja administrative division",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nama": { "type": "string" },
+        "kategori": { "type": "string" }
+      },
+      "required": ["id", "nama", "kategori"]
+    },
+    "leaves": {
+      "title": "LeaveRequest",
+      "description": "Leave Request entity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nip": { "type": "string" },
+        "nama": { "type": "string" },
+        "jabatan": { "type": "string" },
+        "unitKerja": { "type": "string" },
+        "pangkatGol": { "type": "string" },
+        "jenisCuti": { "type": "string" },
+        "alasan": { "type": "string" },
+        "lamaHari": { "type": "number" },
+        "tanggalMulai": { "type": "string" },
+        "tanggalSelesai": { "type": "string" },
+        "alamatCuti": { "type": "string" },
+        "telepon": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "nip", "nama", "status"]
+    },
+    "notifications": {
+      "title": "Notification",
+      "description": "Notification entity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nip": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "nip", "title", "message", "isRead", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": "users",
+      "description": "Users collection"
+    },
+    "units": {
+      "schema": "units",
+      "description": "Units collection"
+    },
+    "leaves": {
+      "schema": "leaves",
+      "description": "Leaves collection"
+    },
+    "notifications": {
+      "schema": "notifications",
+      "description": "Notifications collection"
+    }
+  }
+}
