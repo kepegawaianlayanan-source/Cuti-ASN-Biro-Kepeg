@@ -127,8 +127,35 @@ if (fs.existsSync(firebaseConfigPath)) {
     db = getFirestore(app, config.firestoreDatabaseId || "(default)");
     isFirebaseEnabled = true;
     console.log("Firebase Firestore initialized successfully with database ID:", config.firestoreDatabaseId);
+    
+    // Auto-seed Firestore collections asynchronously if empty
+    autoSeedFirestore();
   } catch (err) {
     console.error("Failed to initialize Firebase:", err);
+  }
+}
+
+async function autoSeedFirestore(): Promise<void> {
+  if (!isFirebaseEnabled) return;
+  try {
+    const usersSnap = await getDocs(collection(db, "users"));
+    if (usersSnap.empty) {
+      console.log("Firestore users collection is empty. Auto-seeding default Basarnas users...");
+      for (const user of SEED_USERS) {
+        await setDoc(doc(db, "users", user.nip), user);
+      }
+      console.log("Firestore users auto-seeded!");
+    }
+    const unitsSnap = await getDocs(collection(db, "units"));
+    if (unitsSnap.empty) {
+      console.log("Firestore units collection is empty. Auto-seeding default Basarnas units...");
+      for (const unit of SEED_UNITS) {
+        await setDoc(doc(db, "units", unit.id), unit);
+      }
+      console.log("Firestore units auto-seeded!");
+    }
+  } catch (err) {
+    console.error("Failed to auto-seed Firestore:", err);
   }
 }
 
