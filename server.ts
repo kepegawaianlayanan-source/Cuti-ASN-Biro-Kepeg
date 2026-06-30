@@ -27,9 +27,13 @@ const LEAVES_FILE = path.join(DATA_DIR, "leaves.json");
 const NOTIFICATIONS_FILE = path.join(DATA_DIR, "notifications.json");
 const UNITS_FILE = path.join(DATA_DIR, "units.json");
 
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+// Ensure data directory exists safely
+try {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+} catch (err) {
+  console.warn("Could not create data directory, might be a read-only filesystem:", err);
 }
 
 // Compact seeding data containing exactly all 44 civil servants as requested
@@ -90,8 +94,10 @@ function readDb<T>(filePath: string, defaultData: T): T {
   } catch (error) {
     console.error(`Error reading ${filePath}:`, error);
   }
-  // If doesn't exist or errored, write and return default
-  writeDb(filePath, defaultData);
+  // If doesn't exist or errored, write and return default (only if Firebase is not active)
+  if (!isFirebaseEnabled) {
+    writeDb(filePath, defaultData);
+  }
   return defaultData;
 }
 
@@ -195,14 +201,14 @@ async function getUser(nip: string): Promise<User | null> {
 
 // Save or update user
 async function saveUser(user: User): Promise<void> {
-  // Always mirror write to local fallback
-  const uList = readDb<User[]>(USERS_FILE, SEED_USERS);
-  const idx = uList.findIndex(u => u.nip === user.nip);
-  if (idx !== -1) uList[idx] = user;
-  else uList.push(user);
-  writeDb(USERS_FILE, uList);
-
-  if (!isFirebaseEnabled) return;
+  if (!isFirebaseEnabled) {
+    const uList = readDb<User[]>(USERS_FILE, SEED_USERS);
+    const idx = uList.findIndex(u => u.nip === user.nip);
+    if (idx !== -1) uList[idx] = user;
+    else uList.push(user);
+    writeDb(USERS_FILE, uList);
+    return;
+  }
   try {
     await setDoc(doc(db, "users", user.nip), user);
   } catch (err) {
@@ -212,12 +218,12 @@ async function saveUser(user: User): Promise<void> {
 
 // Delete user
 async function deleteUserDb(nip: string): Promise<void> {
-  // Always mirror write to local fallback
-  let uList = readDb<User[]>(USERS_FILE, SEED_USERS);
-  uList = uList.filter(u => u.nip !== nip);
-  writeDb(USERS_FILE, uList);
-
-  if (!isFirebaseEnabled) return;
+  if (!isFirebaseEnabled) {
+    let uList = readDb<User[]>(USERS_FILE, SEED_USERS);
+    uList = uList.filter(u => u.nip !== nip);
+    writeDb(USERS_FILE, uList);
+    return;
+  }
   try {
     await deleteDoc(doc(db, "users", nip));
   } catch (err) {
@@ -239,14 +245,14 @@ async function getAllUnits(): Promise<UnitKerja[]> {
 
 // Save or update unit
 async function saveUnit(unit: UnitKerja): Promise<void> {
-  // Always mirror write to local fallback
-  const uList = readDb<UnitKerja[]>(UNITS_FILE, SEED_UNITS);
-  const idx = uList.findIndex(u => u.id === unit.id);
-  if (idx !== -1) uList[idx] = unit;
-  else uList.push(unit);
-  writeDb(UNITS_FILE, uList);
-
-  if (!isFirebaseEnabled) return;
+  if (!isFirebaseEnabled) {
+    const uList = readDb<UnitKerja[]>(UNITS_FILE, SEED_UNITS);
+    const idx = uList.findIndex(u => u.id === unit.id);
+    if (idx !== -1) uList[idx] = unit;
+    else uList.push(unit);
+    writeDb(UNITS_FILE, uList);
+    return;
+  }
   try {
     await setDoc(doc(db, "units", unit.id), unit);
   } catch (err) {
@@ -256,12 +262,12 @@ async function saveUnit(unit: UnitKerja): Promise<void> {
 
 // Delete unit
 async function deleteUnitDb(id: string): Promise<void> {
-  // Always mirror write to local fallback
-  let uList = readDb<UnitKerja[]>(UNITS_FILE, SEED_UNITS);
-  uList = uList.filter(u => u.id !== id);
-  writeDb(UNITS_FILE, uList);
-
-  if (!isFirebaseEnabled) return;
+  if (!isFirebaseEnabled) {
+    let uList = readDb<UnitKerja[]>(UNITS_FILE, SEED_UNITS);
+    uList = uList.filter(u => u.id !== id);
+    writeDb(UNITS_FILE, uList);
+    return;
+  }
   try {
     await deleteDoc(doc(db, "units", id));
   } catch (err) {
@@ -305,14 +311,14 @@ async function getLeave(id: string): Promise<LeaveRequest | null> {
 
 // Save or update leave request
 async function saveLeave(leave: LeaveRequest): Promise<void> {
-  // Always mirror write to local fallback
-  const list = readDb<LeaveRequest[]>(LEAVES_FILE, []);
-  const idx = list.findIndex(l => l.id === leave.id);
-  if (idx !== -1) list[idx] = leave;
-  else list.unshift(leave);
-  writeDb(LEAVES_FILE, list);
-
-  if (!isFirebaseEnabled) return;
+  if (!isFirebaseEnabled) {
+    const list = readDb<LeaveRequest[]>(LEAVES_FILE, []);
+    const idx = list.findIndex(l => l.id === leave.id);
+    if (idx !== -1) list[idx] = leave;
+    else list.unshift(leave);
+    writeDb(LEAVES_FILE, list);
+    return;
+  }
   try {
     await setDoc(doc(db, "leaves", leave.id), leave);
   } catch (err) {
@@ -322,12 +328,12 @@ async function saveLeave(leave: LeaveRequest): Promise<void> {
 
 // Delete leave request
 async function deleteLeaveDb(id: string): Promise<void> {
-  // Always mirror write to local fallback
-  let list = readDb<LeaveRequest[]>(LEAVES_FILE, []);
-  list = list.filter(l => l.id !== id);
-  writeDb(LEAVES_FILE, list);
-
-  if (!isFirebaseEnabled) return;
+  if (!isFirebaseEnabled) {
+    let list = readDb<LeaveRequest[]>(LEAVES_FILE, []);
+    list = list.filter(l => l.id !== id);
+    writeDb(LEAVES_FILE, list);
+    return;
+  }
   try {
     await deleteDoc(doc(db, "leaves", id));
   } catch (err) {
@@ -356,12 +362,12 @@ async function getNotificationsForNip(nip: string): Promise<Notification[]> {
 
 // Save notification
 async function saveNotificationDb(notif: Notification): Promise<void> {
-  // Always mirror write to local fallback
-  const list = readDb<Notification[]>(NOTIFICATIONS_FILE, []);
-  list.unshift(notif);
-  writeDb(NOTIFICATIONS_FILE, list);
-
-  if (!isFirebaseEnabled) return;
+  if (!isFirebaseEnabled) {
+    const list = readDb<Notification[]>(NOTIFICATIONS_FILE, []);
+    list.unshift(notif);
+    writeDb(NOTIFICATIONS_FILE, list);
+    return;
+  }
   try {
     await setDoc(doc(db, "notifications", notif.id), notif);
   } catch (err) {
@@ -371,16 +377,16 @@ async function saveNotificationDb(notif: Notification): Promise<void> {
 
 // Mark notifications as read
 async function markAllNotificationsAsRead(nip: string): Promise<void> {
-  // Always mirror write to local fallback
-  const list = readDb<Notification[]>(NOTIFICATIONS_FILE, []);
-  list.forEach(n => {
-    if (n.nip === String(nip)) {
-      n.isRead = true;
-    }
-  });
-  writeDb(NOTIFICATIONS_FILE, list);
-
-  if (!isFirebaseEnabled) return;
+  if (!isFirebaseEnabled) {
+    const list = readDb<Notification[]>(NOTIFICATIONS_FILE, []);
+    list.forEach(n => {
+      if (n.nip === String(nip)) {
+        n.isRead = true;
+      }
+    });
+    writeDb(NOTIFICATIONS_FILE, list);
+    return;
+  }
   try {
     const snapshot = await getDocs(collection(db, "notifications"));
     for (const d of snapshot.docs) {
