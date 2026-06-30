@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, X, Check, FileText, AlertCircle, Calendar, MapPin, Phone, RefreshCw, UserCheck, CheckCircle2, XCircle, Info, Landmark } from 'lucide-react';
 import { User, LeaveRequest, LeaveType, LeaveStatus, CatatanCuti, UnitKerja } from '../types';
+import { 
+  getLeavesDirect, 
+  getUsersDirect, 
+  getUnitsDirect, 
+  saveLeaveDirect, 
+  deleteLeaveDirect 
+} from '../lib/firebaseDb';
 
 interface LeaveManagementProps {
   showToast: (message: string, type: 'success' | 'error') => void;
@@ -54,20 +61,11 @@ export default function LeaveManagement({ showToast, onLeavesChange }: LeaveMana
   const fetchLeavesAndUsers = async () => {
     setIsLoading(true);
     try {
-      // Admin gets all leaves using role=admin & some nip
-      const [leavesRes, usersRes, unitsRes] = await Promise.all([
-        fetch('/api/leave/list?nip=7777&role=admin'),
-        fetch('/api/users'),
-        fetch('/api/units')
+      const [leavesData, usersData, unitsData] = await Promise.all([
+        getLeavesDirect('7777', 'admin'),
+        getUsersDirect(),
+        getUnitsDirect()
       ]);
-
-      if (!leavesRes.ok) throw new Error('Gagal memuat daftar cuti.');
-      if (!usersRes.ok) throw new Error('Gagal memuat data pegawai.');
-      if (!unitsRes.ok) throw new Error('Gagal memuat data unit kerja.');
-
-      const leavesData = await leavesRes.json();
-      const usersData = await usersRes.json();
-      const unitsData = await unitsRes.json();
 
       setLeaves(leavesData);
       setUsers(usersData);
@@ -180,8 +178,19 @@ export default function LeaveManagement({ showToast, onLeavesChange }: LeaveMana
         luarTanggungan: jenisCuti === 'luar_tanggungan' ? 'Tersedia' : '-'
       };
 
-      const payload = {
+      const selectedUser = users.find(u => u.nip === selectedNip);
+      if (!selectedUser) throw new Error('Pegawai tidak ditemukan.');
+
+      const activeVerif = users.find(u => u.nip === verifikatorNip);
+      const activePimp = users.find(u => u.nip === pimpinanNip);
+
+      const newLeave: LeaveRequest = {
+        id: `cuti_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
         nip: selectedNip,
+        nama: selectedUser.nama,
+        jabatan: selectedUser.jabatan,
+        unitKerja: selectedUser.unit_kerja,
+        pangkatGol: selectedUser.pangkatGol || '-',
         jenisCuti,
         alasan: alasan.trim(),
         lamaHari,
@@ -189,24 +198,31 @@ export default function LeaveManagement({ showToast, onLeavesChange }: LeaveMana
         tanggalSelesai,
         alamatCuti: alamatCuti.trim(),
         telepon: telepon.trim(),
-        verifikatorNip,
-        pimpinanNip,
         catatanCuti: catatan,
         status: leaveStatus,
+        
+        verifikatorNip,
+        verifikatorNama: activeVerif?.nama,
+        verifikatorJabatan: activeVerif?.jabatan,
+        verifikatorStatus: (leaveStatus === 'disetujui' || leaveStatus === 'menunggu_pimpinan') ? 'disetujui' : undefined,
         verifikatorNotes: (leaveStatus === 'disetujui' || leaveStatus === 'menunggu_pimpinan') ? verifikatorNotes : undefined,
-        pimpinanNotes: leaveStatus === 'disetujui' ? pimpinanNotes : undefined
+        verifikatorDate: (leaveStatus === 'disetujui' || leaveStatus === 'menunggu_pimpinan') ? new Date().toISOString() : undefined,
+        verifikatorSignature: (leaveStatus === 'disetujui' || leaveStatus === 'menunggu_pimpinan') ? (activeVerif?.signature || '') : undefined,
+
+        pimpinanNip,
+        pimpinanNama: activePimp?.nama,
+        pimpinanJabatan: activePimp?.jabatan,
+        pimpinanStatus: leaveStatus === 'disetujui' ? 'disetujui' : undefined,
+        pimpinanNotes: leaveStatus === 'disetujui' ? pimpinanNotes : undefined,
+        pimpinanDate: leaveStatus === 'disetujui' ? new Date().toISOString() : undefined,
+        pimpinanSignature: leaveStatus === 'disetujui' ? (activePimp?.signature || '') : undefined,
+        
+        createdAt: new Date().toISOString()
       };
 
-      const res = await fetch('/api/admin/leave/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      await saveLeaveDirect(newLeave);
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Terjadi kesalahan sistem.');
-
-      showToast(data.message || 'Data cuti berhasil diinput oleh Admin.', 'success');
+      showToast('Data cuti berhasil diinput oleh Admin.', 'success');
       setIsModalOpen(false);
       fetchLeavesAndUsers();
       if (onLeavesChange) onLeavesChange();
@@ -230,14 +246,9 @@ export default function LeaveManagement({ showToast, onLeavesChange }: LeaveMana
 
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/admin/leave/${deleteTarget.id}`, {
-        method: 'DELETE'
-      });
+      await deleteLeaveDirect(deleteTarget.id);
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal menghapus pengajuan.');
-
-      showToast(data.message || 'Pengajuan cuti berhasil dihapus.', 'success');
+      showToast('Pengajuan cuti berhasil dihapus.', 'success');
       setDeleteTarget(null);
       fetchLeavesAndUsers();
       if (onLeavesChange) onLeavesChange();

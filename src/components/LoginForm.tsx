@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { User, UserRole } from '../types';
 import { LogIn, KeyRound, ShieldAlert, Users, Info } from 'lucide-react';
+import { getUserDirect } from '../lib/firebaseDb';
 
 interface LoginFormProps {
   onLoginSuccess: (user: User) => void;
@@ -40,20 +41,19 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nip: nip.trim(), password }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Autentikasi gagal');
+      const user = await getUserDirect(nip.trim());
+      if (!user) {
+        throw new Error('Pegawai dengan NIP tersebut tidak ditemukan.');
+      }
+      if (user.password !== password) {
+        throw new Error('Kata sandi salah.');
       }
 
-      onLoginSuccess(data.user);
+      // Return authenticated user metadata safely
+      const { password: _, ...safeUser } = user;
+      onLoginSuccess(safeUser as User);
     } catch (err: any) {
-      setError(err.message || 'Koneksi ke server gagal.');
+      setError(err.message || 'Koneksi ke database gagal.');
     } finally {
       setIsLoading(false);
     }
@@ -67,20 +67,18 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
     setError(null);
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nip: demoNip, password: 'basarnas123' }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Autentikasi gagal');
+      const user = await getUserDirect(demoNip);
+      if (!user) {
+        throw new Error('Pegawai demo tidak ditemukan.');
+      }
+      if (user.password !== 'basarnas123') {
+        throw new Error('Sandi pegawai demo telah diubah.');
       }
 
-      onLoginSuccess(data.user);
+      const { password: _, ...safeUser } = user;
+      onLoginSuccess(safeUser as User);
     } catch (err: any) {
-      setError(err.message || 'Koneksi ke server gagal.');
+      setError(err.message || 'Koneksi ke database gagal.');
     } finally {
       setIsLoading(false);
     }

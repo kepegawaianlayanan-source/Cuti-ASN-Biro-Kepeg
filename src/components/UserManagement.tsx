@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, X, Check, Users, AlertCircle, Key, ShieldCheck } from 'lucide-react';
 import { User, UserRole, UnitKerja } from '../types';
+import { 
+  getUsersDirect, 
+  getUnitsDirect, 
+  getUserDirect, 
+  saveUserDirect, 
+  deleteUserDirect 
+} from '../lib/firebaseDb';
 
 interface UserManagementProps {
   showToast: (message: string, type: 'success' | 'error') => void;
@@ -47,16 +54,10 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
   const fetchUsersAndUnits = async () => {
     setIsLoading(true);
     try {
-      const [usersRes, unitsRes] = await Promise.all([
-        fetch('/api/users'),
-        fetch('/api/units')
+      const [usersData, unitsData] = await Promise.all([
+        getUsersDirect(),
+        getUnitsDirect()
       ]);
-
-      if (!usersRes.ok) throw new Error('Gagal mengambil data pegawai');
-      if (!unitsRes.ok) throw new Error('Gagal mengambil data unit kerja');
-
-      const usersData = await usersRes.json();
-      const unitsData = await unitsRes.json();
 
       setUsers(usersData);
       setUnits(unitsData);
@@ -110,33 +111,46 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
 
     setIsLoading(true);
     try {
-      const url = modalMode === 'add' ? '/api/admin/users' : `/api/admin/users/${selectedUser?.nip}`;
-      const method = modalMode === 'add' ? 'POST' : 'PUT';
-
-      const payload: any = {
-        nip: nip.trim(),
-        nama: nama.trim(),
-        role,
-        unit_kerja: unitKerja,
-        jabatan: jabatan.trim(),
-        pangkatGol: pangkatGol.trim(),
-        eselon
-      };
-
-      if (password.trim()) {
-        payload.password = password.trim();
+      let finalUser: User;
+      
+      if (modalMode === 'add') {
+        const existing = await getUserDirect(nip.trim());
+        if (existing) {
+          throw new Error('Pegawai dengan NIP tersebut sudah terdaftar.');
+        }
+        finalUser = {
+          nip: nip.trim(),
+          nama: nama.trim(),
+          role,
+          unit_kerja: unitKerja,
+          jabatan: jabatan.trim(),
+          pangkatGol: pangkatGol.trim(),
+          eselon,
+          password: password.trim() || 'basarnas123'
+        };
+      } else {
+        const existing = await getUserDirect(selectedUser?.nip || '');
+        if (!existing) {
+          throw new Error('Pegawai tidak ditemukan.');
+        }
+        finalUser = {
+          ...existing,
+          nip: nip.trim(),
+          nama: nama.trim(),
+          role,
+          unit_kerja: unitKerja,
+          jabatan: jabatan.trim(),
+          pangkatGol: pangkatGol.trim(),
+          eselon,
+        };
+        if (password.trim()) {
+          finalUser.password = password.trim();
+        }
       }
 
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      await saveUserDirect(finalUser);
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Terjadi kesalahan sistem.');
-
-      showToast(data.message || 'Data pegawai berhasil disimpan.', 'success');
+      showToast('Data pegawai berhasil disimpan.', 'success');
       setIsModalOpen(false);
       fetchUsersAndUnits();
       if (onUsersChange) onUsersChange();
@@ -159,11 +173,9 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/admin/users/${deleteTarget.nip}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal menghapus pegawai.');
+      await deleteUserDirect(deleteTarget.nip);
 
-      showToast(data.message || 'Pegawai berhasil dihapus.', 'success');
+      showToast('Pegawai berhasil dihapus.', 'success');
       setDeleteTarget(null);
       fetchUsersAndUnits();
       if (onUsersChange) onUsersChange();

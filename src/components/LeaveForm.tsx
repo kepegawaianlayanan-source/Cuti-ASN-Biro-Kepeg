@@ -4,8 +4,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { User, LeaveType, CatatanCuti } from '../types';
+import { User, LeaveType, CatatanCuti, LeaveRequest } from '../types';
 import { FileText, Send, Calendar, MapPin, Phone, HelpCircle, Loader2, RefreshCw } from 'lucide-react';
+import { getUsersDirect, saveLeaveDirect, triggerNotificationDirect } from '../lib/firebaseDb';
 
 interface LeaveFormProps {
   user: User;
@@ -44,29 +45,26 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
     async function fetchUsers() {
       setIsLoadingUsers(true);
       try {
-        const res = await fetch('/api/users');
-        if (res.ok) {
-          const data = await res.json();
-          setAllUsers(data);
-          
-          // Set sensible defaults
-          const verifiers = data.filter((u: User) => u.role === 'verifikator');
-          const leaders = data.filter((u: User) => u.role === 'pimpinan');
-          
-          // Try to select verifiers in same department/unit if possible
-          const sameDeptVerifier = verifiers.find((v: User) => v.unit_kerja === user.unit_kerja);
-          if (sameDeptVerifier) {
-            setVerifikatorNip(sameDeptVerifier.nip);
-          } else if (verifiers.length > 0) {
-            setVerifikatorNip(verifiers[0].nip);
-          }
+        const data = await getUsersDirect();
+        setAllUsers(data);
+        
+        // Set sensible defaults
+        const verifiers = data.filter((u: User) => u.role === 'verifikator');
+        const leaders = data.filter((u: User) => u.role === 'pimpinan');
+        
+        // Try to select verifiers in same department/unit if possible
+        const sameDeptVerifier = verifiers.find((v: User) => v.unit_kerja === user.unit_kerja);
+        if (sameDeptVerifier) {
+          setVerifikatorNip(sameDeptVerifier.nip);
+        } else if (verifiers.length > 0) {
+          setVerifikatorNip(verifiers[0].nip);
+        }
 
-          const sameDeptLeader = leaders.find((l: User) => l.unit_kerja === user.unit_kerja);
-          if (sameDeptLeader) {
-            setPimpinanNip(sameDeptLeader.nip);
-          } else if (leaders.length > 0) {
-            setPimpinanNip(leaders[0].nip);
-          }
+        const sameDeptLeader = leaders.find((l: User) => l.unit_kerja === user.unit_kerja);
+        if (sameDeptLeader) {
+          setPimpinanNip(sameDeptLeader.nip);
+        } else if (leaders.length > 0) {
+          setPimpinanNip(leaders[0].nip);
         }
       } catch (err) {
         console.error("Error fetching officers:", err);
@@ -135,31 +133,49 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch('/api/leave/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nip: user.nip,
-          jenisCuti,
-          alasan,
-          lamaHari,
-          tanggalMulai,
-          tanggalSelesai,
-          alamatCuti,
-          telepon,
-          verifikatorNip,
-          pimpinanNip,
-          catatanCuti
-        }),
-      });
+      const activeVerif = allUsers.find(u => u.nip === verifikatorNip);
+      const activePimp = allUsers.find(u => u.nip === pimpinanNip);
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Gagal mengirim pengajuan cuti');
-      }
+      const newLeave: LeaveRequest = {
+        id: `cuti_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+        nip: user.nip,
+        nama: user.nama,
+        jabatan: user.jabatan,
+        unitKerja: user.unit_kerja,
+        pangkatGol: user.pangkatGol || '-',
+        jenisCuti,
+        alasan,
+        lamaHari,
+        tanggalMulai,
+        tanggalSelesai,
+        alamatCuti,
+        telepon,
+        catatanCuti,
+        status: 'menunggu_verifikasi',
+        pemohonSignature: user.signature || '',
+        
+        verifikatorNip,
+        verifikatorNama: activeVerif?.nama || '',
+        verifikatorJabatan: activeVerif?.jabatan || '',
+        
+        pimpinanNip,
+        pimpinanNama: activePimp?.nama || '',
+        pimpinanJabatan: activePimp?.jabatan || '',
+        
+        createdAt: new Date().toISOString()
+      };
+
+      await saveLeaveDirect(newLeave);
+
+      // Trigger notification for verifikator
+      await triggerNotificationDirect(
+        verifikatorNip,
+        "Pengajuan Cuti Baru",
+        `${user.nama} mengajukan cuti ${jenisCuti} selama ${lamaHari} hari dan membutuhkan verifikasi Anda.`
+      );
 
       // Success
-      onSuccess(data.leaveRequest);
+      onSuccess(newLeave);
       
       // Reset form
       setAlasan('');

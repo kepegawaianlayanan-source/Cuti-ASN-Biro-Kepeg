@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, X, Check, Landmark, AlertCircle, Trash } from 'lucide-react';
 import { UnitKerja } from '../types';
+import { 
+  getUnitsDirect, 
+  saveUnitDirect, 
+  deleteUnitDirect 
+} from '../lib/firebaseDb';
 
 interface UnitKerjaManagementProps {
   showToast: (message: string, type: 'success' | 'error') => void;
@@ -39,9 +44,7 @@ export default function UnitKerjaManagement({ showToast, onUnitsChange }: UnitKe
   const fetchUnits = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/units');
-      if (!res.ok) throw new Error('Gagal mengambil data unit kerja');
-      const data = await res.json();
+      const data = await getUnitsDirect();
       setUnits(data);
     } catch (err: any) {
       showToast(err.message || 'Gagal memuat unit kerja', 'error');
@@ -81,22 +84,15 @@ export default function UnitKerjaManagement({ showToast, onUnitsChange }: UnitKe
 
     setIsLoading(true);
     try {
-      const url = modalMode === 'add' ? '/api/units' : `/api/units/${selectedUnit?.id}`;
-      const method = modalMode === 'add' ? 'POST' : 'PUT';
+      const finalUnit: UnitKerja = {
+        id: modalMode === 'add' ? `unit_${Date.now()}` : (selectedUnit?.id || `unit_${Date.now()}`),
+        nama: inputNama.trim(),
+        kategori: inputKategori
+      };
 
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          nama: inputNama.trim(),
-          kategori: inputKategori
-        })
-      });
+      await saveUnitDirect(finalUnit);
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Terjadi kesalahan sistem.');
-
-      showToast(data.message || 'Berhasil menyimpan unit kerja.', 'success');
+      showToast('Berhasil menyimpan unit kerja.', 'success');
       setIsModalOpen(false);
       fetchUnits();
       if (onUnitsChange) onUnitsChange();
@@ -112,11 +108,9 @@ export default function UnitKerjaManagement({ showToast, onUnitsChange }: UnitKe
 
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/units/${deleteTarget.id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal menghapus unit kerja.');
+      await deleteUnitDirect(deleteTarget.id);
 
-      showToast(data.message || 'Unit kerja berhasil dihapus.', 'success');
+      showToast('Unit kerja berhasil dihapus.', 'success');
       setDeleteTarget(null);
       fetchUnits();
       if (onUnitsChange) onUnitsChange();

@@ -24,6 +24,17 @@ import {
   syncAllLeaves 
 } from './lib/googleSheets';
 import { 
+  getLeavesDirect, 
+  getNotificationsDirect, 
+  saveUserDirect, 
+  markAllNotificationsAsReadDirect, 
+  saveLeaveDirect, 
+  triggerNotificationDirect, 
+  resetDatabaseDirect, 
+  getUserDirect,
+  getUsersDirect
+} from './lib/firebaseDb';
+import { 
   FileText, LogOut, KeyRound, CheckCircle2, AlertCircle, RefreshCw, Clock, 
   User as UserIcon, Plus, Eye, Check, X, Building, Phone, Calendar, Landmark,
   Shield, Inbox, FileCheck, HelpCircle, PenTool, Users
@@ -154,11 +165,8 @@ export default function App() {
   const fetchLeaves = async () => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/leave/list?nip=${user.nip}&role=${user.role}`);
-      if (res.ok) {
-        const data = await res.json();
-        setLeaveRequests(data);
-      }
+      const data = await getLeavesDirect(user.nip, user.role);
+      setLeaveRequests(data);
     } catch (err) {
       console.error("Failed to fetch leaves:", err);
     }
@@ -167,11 +175,8 @@ export default function App() {
   const fetchNotifications = async () => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/notifications?nip=${user.nip}`);
-      if (res.ok) {
-        const data = await res.json();
-        setNotifications(data);
-      }
+      const data = await getNotificationsDirect(user.nip);
+      setNotifications(data);
     } catch (err) {
       console.error("Failed to fetch notifications:", err);
     }
@@ -203,20 +208,8 @@ export default function App() {
   const handleSignatureSave = async (signatureDataUrl: string) => {
     if (!user) return;
     try {
-      const res = await fetch('/api/user/update-signature', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nip: user.nip,
-          signature: signatureDataUrl
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Gagal menyimpan tanda tangan');
-      }
-      
       const updatedUser = { ...user, signature: signatureDataUrl };
+      await saveUserDirect(updatedUser);
       setUser(updatedUser);
       localStorage.setItem('basarnas_user', JSON.stringify(updatedUser));
       
@@ -249,15 +242,8 @@ export default function App() {
   const handleMarkNotificationsRead = async () => {
     if (!user) return;
     try {
-      const res = await fetch('/api/notifications/read', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nip: user.nip }),
-      });
-      if (res.ok) {
-        // Optimistically update
-        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-      }
+      await markAllNotificationsAsReadDirect(user.nip);
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
     } catch (err) {
       console.error(err);
     }
@@ -285,20 +271,17 @@ export default function App() {
     setPasswordLoading(true);
 
     try {
-      const res = await fetch('/api/auth/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nip: user?.nip,
-          oldPassword,
-          newPassword
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Gagal mengubah sandi');
+      if (!user) throw new Error("Pengguna belum masuk.");
+      const freshUser = await getUserDirect(user.nip);
+      if (!freshUser) throw new Error("Pegawai tidak ditemukan.");
+      if (freshUser.password !== oldPassword) {
+        throw new Error("Kata sandi lama salah.");
       }
+      
+      const updatedUser = { ...freshUser, password: newPassword };
+      await saveUserDirect(updatedUser);
+      setUser(updatedUser);
+      localStorage.setItem('basarnas_user', JSON.stringify(updatedUser));
 
       showToast("Kata sandi berhasil diperbarui!", 'success');
       setIsPasswordModalOpen(false);
@@ -318,21 +301,59 @@ export default function App() {
 
     setIsActionLoading(true);
     try {
-      const res = await fetch('/api/leave/action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          leaveId: selectedRequestForAction.id,
-          actorNip: user.nip,
-          actorRole: user.role,
-          action,
-          notes: approvalNotes
-        })
-      });
+      const updatedRequest: LeaveRequest = { ...selectedRequestForAction };
+      
+      if (user.role === 'verifikator') {
+        updatedRequest.verifikatorNip = user.nip;
+        updatedRequest.verifikatorNama = user.nama;
+        updatedRequest.verifikatorJabatan = user.jabatan;
+        updatedRequest.verifikatorStatus = action;
+        updatedRequest.verifikatorNotes = approvalNotes;
+        updatedRequest.verifikatorDate = new Date().toISOString();
+        updatedRequest.verifikatorSignature = user.signature || '';
+        
+        if (action === 'disetujui') {
+          updatedRequest.status = 'menunggu_pimpinan';
+        } else {
+          updatedRequest.status = action as any; // 'perubahan', 'ditangguhkan', 'ditolak'
+        }
+      } else if (user.role === 'pimpinan') {
+        updatedRequest.pimpinanNip = user.nip;
+        updatedRequest.pimpinanNama = user.nama;
+        updatedRequest.pimpinanJabatan = user.jabatan;
+        updatedRequest.pimpinanStatus = action;
+        updatedRequest.pimpinanNotes = approvalNotes;
+        updatedRequest.pimpinanDate = new Date().toISOString();
+        updatedRequest.pimpinanSignature = user.signature || '';
+        updatedRequest.status = action as any; // 'disetujui', 'perubahan', 'ditangguhkan', 'ditolak'
+      }
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Gagal menyimpan keputusan.');
+      await saveLeaveDirect(updatedRequest);
+
+      // Trigger notification for pemohon
+      const actionLabels = {
+        'disetujui': 'Disetujui',
+        'perubahan': 'Perlu Perubahan',
+        'ditangguhkan': 'Ditangguhkan',
+        'ditolak': 'Ditolak'
+      };
+      await triggerNotificationDirect(
+        updatedRequest.nip,
+        `Status Cuti: ${actionLabels[action]}`,
+        `Pengajuan cuti Anda telah diproses oleh ${user.nama} dengan keputusan: ${actionLabels[action]}`
+      );
+
+      // Trigger notification for pimpinan if approved by verifikator
+      if (user.role === 'verifikator' && action === 'disetujui') {
+        const usersList = await getUsersDirect();
+        const pimpinans = usersList.filter(u => u.role === 'pimpinan');
+        for (const p of pimpinans) {
+          await triggerNotificationDirect(
+            p.nip,
+            "Persetujuan Cuti Baru",
+            `${updatedRequest.nama} memiliki pengajuan cuti baru yang telah diverifikasi dan menunggu persetujuan Anda.`
+          );
+        }
       }
 
       showToast(`Keputusan '${action}' berhasil disimpan!`, 'success');
@@ -341,8 +362,8 @@ export default function App() {
       fetchLeaves();
 
       // Auto sync status update if Google is connected
-      if (googleToken && spreadsheetId && data.leaveRequest) {
-        syncSingleLeave(data.leaveRequest, googleToken, spreadsheetId)
+      if (googleToken && spreadsheetId) {
+        syncSingleLeave(updatedRequest, googleToken, spreadsheetId)
           .then((ok) => {
             if (ok) {
               showToast("Status cuti diperbarui di Google Sheets!", 'success');
@@ -442,19 +463,10 @@ export default function App() {
 
     setIsAdminResetting(true);
     try {
-      const res = await fetch('/api/admin/reset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'basarnas_demo_reset' })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showToast(data.message, 'success');
-        fetchLeaves();
-        fetchNotifications();
-      } else {
-        showToast(data.error || 'Reset gagal', 'error');
-      }
+      await resetDatabaseDirect();
+      showToast("Sistem berhasil di-reset ke data bawaan.", 'success');
+      fetchLeaves();
+      fetchNotifications();
     } catch (err) {
       showToast('Koneksi terganggu.', 'error');
     } finally {

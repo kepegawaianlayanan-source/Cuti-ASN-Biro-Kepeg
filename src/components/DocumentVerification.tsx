@@ -6,6 +6,8 @@
 import React, { useEffect, useState } from 'react';
 import { LeaveRequest } from '../types';
 import { ShieldCheck, ShieldAlert, Check, Landmark, Calendar, User, Phone, MapPin, FileText, ArrowRight } from 'lucide-react';
+import { db } from '../lib/firebaseDb';
+import { doc, getDoc } from 'firebase/firestore';
 
 interface DocumentVerificationProps {
   verifyId: string;
@@ -20,12 +22,12 @@ export default function DocumentVerification({ verifyId, onGoToLogin }: Document
   useEffect(() => {
     async function verifyDoc() {
       try {
-        const res = await fetch(`/api/leave/verify/${verifyId}`);
-        if (!res.ok) {
+        const docRef = doc(db, 'leaves', verifyId);
+        const snap = await getDoc(docRef);
+        if (!snap.exists()) {
           throw new Error('Dokumen cuti tidak ditemukan atau kode verifikasi salah.');
         }
-        const data = await res.json();
-        setLeave(data);
+        setLeave(snap.data() as LeaveRequest);
       } catch (err: any) {
         setError(err.message || 'Gagal memverifikasi dokumen.');
       } finally {
