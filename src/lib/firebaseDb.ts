@@ -17,7 +17,7 @@ import { User, UnitKerja, LeaveRequest, Notification } from "../types";
 
 // Initialize Firebase client-side
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-export const db = getFirestore(app);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || "(default)");
 
 // Seed data to initialize Firestore directly from client if empty
 const SEED_USERS: User[] = [
