@@ -44,28 +44,32 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
     return wordsA.some(word => wordsB.includes(word));
   };
 
-  const handlePrint = async () => {
+  const handlePrint = async (e: React.MouseEvent) => {
+    e.preventDefault();
     const input = document.getElementById('printable-content') as HTMLElement;
     if (!input) return;
     
     // Temporarily show the element
-    input.classList.remove('hidden');
-    input.classList.add('block');
+    input.style.display = 'block';
     
     // Add a slight delay to ensure rendering
     await new Promise(resolve => setTimeout(resolve, 500));
     
-    const canvas = await html2canvas(input, { scale: 2 });
+    const canvas = await html2canvas(input, { 
+      scale: 2,
+      useCORS: true,
+    });
+    
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+    
     pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
     pdf.save(`Formulir_Cuti_${leave.nama.replace(/\s+/g, '_')}.pdf`);
     
     // Hide it again
-    input.classList.remove('block');
-    input.classList.add('hidden');
+    input.style.display = 'none';
   };
 
   // Helper to check and mark chosen leave type
@@ -96,6 +100,7 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
           </div>
           <div className="flex items-center space-x-3">
             <button
+              type="button"
               onClick={handlePrint}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/10 hover:shadow-lg transition-all flex items-center space-x-1.5"
             >
