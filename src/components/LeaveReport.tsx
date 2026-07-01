@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LeaveRequest } from '../types';
-import { Printer, X, Download } from 'lucide-react';
+import { Printer, X, Download, AlertTriangle } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { toPng } from 'html-to-image';
+import QRCode from 'qrcode';
 
 interface LeaveReportProps {
   leave: LeaveRequest;
@@ -45,6 +46,34 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
   };
 
   const [isDownloading, setIsDownloading] = useState(false);
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+
+  useEffect(() => {
+    if (leave?.id) {
+      // Build the online verification URL
+      const verificationUrl = `${window.location.origin}${window.location.pathname}?verify=${leave.id}`;
+      QRCode.toDataURL(verificationUrl, {
+        margin: 1,
+        width: 150,
+        color: {
+          dark: '#000000',
+          light: '#ffffff'
+        }
+      })
+      .then(url => {
+        setQrCodeUrl(url);
+      })
+      .catch(err => {
+        console.error('Gagal membuat QR Code verifikasi:', err);
+      });
+    }
+  }, [leave?.id]);
+
+  const isPemohonTtdKosong = !leave.pemohonSignature;
+  const isVerifikatorTtdKosong = !!(leave.verifikatorStatus && !leave.verifikatorSignature);
+  const isPimpinanTtdKosong = !!(leave.pimpinanStatus && !leave.pimpinanSignature);
+
+  const hasEmptySignature = isPemohonTtdKosong || isVerifikatorTtdKosong || isPimpinanTtdKosong;
 
   const handlePrint = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -162,10 +191,42 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
           </div>
         </div>
 
+        {/* Alert Banner if Signature is Empty */}
+        {hasEmptySignature && (
+          <div className="mx-6 mt-4 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start space-x-3 no-print">
+            <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+            <div className="text-xs text-rose-800">
+              <p className="font-bold mb-1">Perhatian: Tanda Tangan Belum Lengkap!</p>
+              <p className="mb-2 text-rose-700">Formulir ini belum sah karena dokumen belum ditandatangani:</p>
+              <ul className="list-disc pl-4 space-y-1 font-semibold text-rose-800">
+                {isPemohonTtdKosong && (
+                  <li>Tanda tangan Pemohon ({leave.nama}) masih kosong</li>
+                )}
+                {isVerifikatorTtdKosong && (
+                  <li>Tanda tangan Atasan Langsung / Verifikator ({leave.verifikatorNama || 'Verifikator'}) masih kosong</li>
+                )}
+                {isPimpinanTtdKosong && (
+                  <li>Tanda tangan Pimpinan / Kepala Biro ({leave.pimpinanNama || 'Pimpinan'}) masih kosong</li>
+                )}
+              </ul>
+              <p className="mt-2.5 text-[11px] text-rose-600 font-normal">Silakan lengkapi tanda tangan digital terlebih dahulu sebelum mengunduh atau mencetak dokumen agar dokumen dinyatakan sah secara hukum.</p>
+            </div>
+          </div>
+        )}
+
         {/* Outer Scroll Area inside Modal for Preview */}
         <div className="p-6 md:p-12 overflow-x-auto bg-slate-100/50 flex justify-center no-print">
-          <div id="printable-content" className="bg-white p-8 border border-slate-300 shadow-lg print-container" style={{ width: '215mm', minHeight: '330mm', color: '#000000', fontFamily: 'sans-serif' }}>
+          <div id="printable-content" className="bg-white p-8 border border-slate-300 shadow-lg print-container relative" style={{ width: '215mm', minHeight: '330mm', color: '#000000', fontFamily: 'sans-serif' }}>
             
+            {/* QR Code Verification Badge (Top Right) */}
+            {qrCodeUrl && (
+              <div className="absolute top-8 right-8 flex flex-col items-center border border-black p-1 bg-white text-center rounded-md" style={{ width: '72px' }}>
+                <img src={qrCodeUrl} alt="E-Verify QR Code" className="w-[62px] h-[62px]" />
+                <span className="text-[6px] font-bold text-slate-800 tracking-wider mt-0.5">E-VERIFIKASI</span>
+                <span className="text-[5px] text-slate-500 font-mono">DOKUMEN ASLI</span>
+              </div>
+            )}
+
             {/* REAL PRINT VIEW INJECTED HERE */}
             <div className="text-black text-xs leading-normal">
               
@@ -510,7 +571,17 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
 
       {/* REAL PRINT-ONLY INJECTED SECTION */}
       {/* This section will ONLY show when printing because of our src/index.css media print query! */}
-      <div id="printable-content" className="hidden print:block bg-white p-6 w-full text-black" style={{ fontFamily: 'sans-serif' }}>
+      <div id="printable-content" className="hidden print:block bg-white p-6 w-full text-black relative" style={{ fontFamily: 'sans-serif' }}>
+        
+        {/* QR Code Verification Badge (Top Right for Print Mode) */}
+        {qrCodeUrl && (
+          <div className="absolute top-6 right-6 flex flex-col items-center border border-black p-1 bg-white text-center rounded-md" style={{ width: '72px' }}>
+            <img src={qrCodeUrl} alt="E-Verify QR Code" className="w-[62px] h-[62px]" />
+            <span className="text-[6px] font-bold text-slate-800 tracking-wider mt-0.5">E-VERIFIKASI</span>
+            <span className="text-[5px] text-slate-500 font-mono">DOKUMEN ASLI</span>
+          </div>
+        )}
+
         <div className="text-black text-[11px] leading-normal">
           
 

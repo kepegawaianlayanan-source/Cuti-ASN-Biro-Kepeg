@@ -299,6 +299,14 @@ export default function App() {
   const handleApprovalAction = async (action: 'disetujui' | 'perubahan' | 'ditangguhkan' | 'ditolak') => {
     if (!selectedRequestForAction || !user) return;
 
+    if (!user.signature) {
+      setToast({
+        message: "Gagal memproses keputusan. Anda wajib mengatur Tanda Tangan Digital terlebih dahulu pada menu profil di sudut kanan atas.",
+        type: "error"
+      });
+      return;
+    }
+
     setIsActionLoading(true);
     try {
       const updatedRequest: LeaveRequest = { ...selectedRequestForAction };
@@ -1230,14 +1238,30 @@ export default function App() {
                 />
               </div>
 
+              {!user?.signature && (
+                <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start space-x-2.5 text-xs text-rose-800">
+                  <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold mb-0.5">Tanda Tangan Belum Diatur!</p>
+                    <p className="leading-relaxed text-[11px] text-rose-700">
+                      Anda wajib mengatur tanda tangan digital Anda terlebih dahulu pada menu profil di pojok kanan atas sebelum dapat memberikan keputusan atau persetujuan cuti ini.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Action Buttons Grid */}
               <div className="grid grid-cols-2 gap-2 pt-2">
                 
                 {/* 1. Setujui */}
                 <button
                   onClick={() => handleApprovalAction('disetujui')}
-                  disabled={isActionLoading}
-                  className="py-3 px-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-2xl text-xs flex items-center justify-center space-x-1.5 transition-all shadow-md shadow-green-600/10"
+                  disabled={isActionLoading || !user?.signature}
+                  className={`py-3 px-4 font-bold rounded-2xl text-xs flex items-center justify-center space-x-1.5 transition-all shadow-md ${
+                    !user?.signature
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                      : 'bg-green-600 hover:bg-green-700 text-white shadow-green-600/10'
+                  }`}
                 >
                   <Check className="w-4 h-4" />
                   <span>Setujui (Approve)</span>
@@ -1246,8 +1270,12 @@ export default function App() {
                 {/* 2. Tolak */}
                 <button
                   onClick={() => handleApprovalAction('ditolak')}
-                  disabled={isActionLoading}
-                  className="py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl text-xs flex items-center justify-center space-x-1.5 transition-all shadow-md shadow-red-600/10"
+                  disabled={isActionLoading || !user?.signature}
+                  className={`py-3 px-4 font-bold rounded-2xl text-xs flex items-center justify-center space-x-1.5 transition-all shadow-md ${
+                    !user?.signature
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                      : 'bg-red-600 hover:bg-red-700 text-white shadow-red-600/10'
+                  }`}
                 >
                   <X className="w-4 h-4" />
                   <span>Tolak (Reject)</span>
@@ -1256,8 +1284,12 @@ export default function App() {
                 {/* 3. Tangguhkan */}
                 <button
                   onClick={() => handleApprovalAction('ditangguhkan')}
-                  disabled={isActionLoading}
-                  className="py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl text-xs flex items-center justify-center space-x-1.5 transition-all shadow-md shadow-purple-600/10"
+                  disabled={isActionLoading || !user?.signature}
+                  className={`py-3 px-4 font-bold rounded-2xl text-xs flex items-center justify-center space-x-1.5 transition-all shadow-md ${
+                    !user?.signature
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                      : 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-600/10'
+                  }`}
                 >
                   <Clock className="w-4 h-4" />
                   <span>Tangguhkan (Defer)</span>
@@ -1266,8 +1298,12 @@ export default function App() {
                 {/* 4. Perubahan */}
                 <button
                   onClick={() => handleApprovalAction('perubahan')}
-                  disabled={isActionLoading}
-                  className="py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl text-xs flex items-center justify-center space-x-1.5 transition-all shadow-md shadow-indigo-600/10"
+                  disabled={isActionLoading || !user?.signature}
+                  className={`py-3 px-4 font-bold rounded-2xl text-xs flex items-center justify-center space-x-1.5 transition-all shadow-md ${
+                    !user?.signature
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                      : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/10'
+                  }`}
                 >
                   <RefreshCw className="w-4 h-4" />
                   <span>Minta Perubahan</span>

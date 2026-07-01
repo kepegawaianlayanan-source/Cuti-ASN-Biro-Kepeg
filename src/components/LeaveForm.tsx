@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, LeaveType, CatatanCuti, LeaveRequest } from '../types';
-import { FileText, Send, Calendar, MapPin, Phone, HelpCircle, Loader2, RefreshCw, Building2, Globe } from 'lucide-react';
+import { FileText, Send, Calendar, MapPin, Phone, HelpCircle, Loader2, RefreshCw, Building2, Globe, AlertTriangle } from 'lucide-react';
 import { getUsersDirect, saveLeaveDirect, triggerNotificationDirect, getLeavesDirect } from '../lib/firebaseDb';
 
 interface LeaveFormProps {
@@ -212,6 +212,11 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
     e.preventDefault();
     setError(null);
 
+    if (!user.signature) {
+      setError("Anda belum mengatur Tanda Tangan Digital. Silakan atur tanda tangan Anda terlebih dahulu pada tombol profil di sudut kanan atas.");
+      return;
+    }
+
     if (!alasan || !tanggalMulai || !tanggalSelesai || !alamatCuti || !telepon || !verifikatorNip || !pimpinanNip) {
       setError("Silakan isi semua kolom bertanda bintang (*).");
       return;
@@ -311,6 +316,21 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
           <p className="text-xs text-slate-500">Isi formulir pengajuan cuti berjenjang sesuai format BASARNAS</p>
         </div>
       </div>
+
+      {!user.signature && (
+        <div className="mb-6 p-5 bg-rose-50 border border-rose-100 text-rose-800 rounded-2xl flex items-start space-x-3.5 shadow-sm shadow-rose-100/50">
+          <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+          <div className="text-xs">
+            <p className="font-bold text-sm text-rose-900 mb-1">Tanda Tangan Digital Belum Diatur!</p>
+            <p className="leading-relaxed text-rose-700 font-medium mb-2">
+              Anda wajib mengunggah/menggambar tanda tangan digital Anda terlebih dahulu sebelum dapat mengisi dan mengajukan cuti. Hal ini diperlukan agar dokumen formulir cuti Anda sah secara resmi.
+            </p>
+            <p className="text-[11px] font-semibold text-rose-800">
+              Silakan klik tombol profil di pojok kanan atas layar dan pilih "Atur Tanda Tangan" untuk memulai.
+            </p>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 text-xs rounded-2xl">
@@ -737,8 +757,12 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
           <button
             id="submit-leave-btn"
             type="submit"
-            disabled={isSubmitting}
-            className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-2xl shadow-lg shadow-slate-900/10 hover:shadow-xl transition-all flex items-center space-x-2 disabled:opacity-50"
+            disabled={isSubmitting || !user.signature}
+            className={`px-6 py-3 text-sm font-semibold rounded-2xl shadow-lg transition-all flex items-center space-x-2 ${
+              !user.signature
+                ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                : 'bg-slate-900 hover:bg-slate-800 text-white shadow-slate-900/10 hover:shadow-xl'
+            }`}
           >
             {isSubmitting ? (
               <Loader2 className="w-4 h-4 animate-spin" />
