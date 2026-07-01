@@ -22,6 +22,8 @@ export interface User {
   pangkatGol?: string; // added to match official leave PDF requirements
   signature?: string;  // base64 data URL signature
   jatah_cuti?: number; // annual leave quota
+  nMinus1?: string;    // sisa cuti N-1
+  nMinus2?: string;    // sisa cuti N-2
 }
 
 export type LeaveType = 'tahunan' | 'besar' | 'sakit' | 'melahirkan' | 'alasan_penting' | 'luar_tanggungan';

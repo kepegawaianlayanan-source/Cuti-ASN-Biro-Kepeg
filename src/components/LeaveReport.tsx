@@ -4,6 +4,8 @@
  */
 
 import React from 'react';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import { LeaveRequest } from '../types';
 import { Printer, Download, X, Check } from 'lucide-react';
 
@@ -28,23 +30,42 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
     }
   };
 
-  // Helper to compare unit_kerja flexibly and robustly (e.g., treating "Pusat - Biro Kepegawaian" and "Pusat - Biro Kepegawaian, Organisasi, dan Tata Laksana" as identical)
+  // Helper to compare unit_kerja and pimpinanJabatan flexibly
   const isSameUnit = (unitA: string, unitB: string): boolean => {
     if (!unitA || !unitB) return false;
     
-    const normalize = (s: string) => {
-      let res = s.toLowerCase().replace(/\s+/g, '').replace(/[,.-]/g, '');
-      if (res.includes("birokepegawaian")) {
-        return "birokepegawaian";
-      }
-      return res;
-    };
+    // Normalize and split into significant words (ignoring small words)
+    const getWords = (s: string) => s.toLowerCase().replace(/[,.-]/g, '').split(/\s+/).filter(w => w.length > 3);
     
-    return normalize(unitA) === normalize(unitB);
+    const wordsA = getWords(unitA);
+    const wordsB = getWords(unitB);
+    
+    // Check if they share at least one significant word (like 'Operasi', 'Kepegawaian')
+    return wordsA.some(word => wordsB.includes(word));
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    const input = document.getElementById('printable-content') as HTMLElement;
+    if (!input) return;
+    
+    // Temporarily show the element
+    input.classList.remove('hidden');
+    input.classList.add('block');
+    
+    // Add a slight delay to ensure rendering
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    const canvas = await html2canvas(input, { scale: 2 });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    pdf.save(`Formulir_Cuti_${leave.nama.replace(/\s+/g, '_')}.pdf`);
+    
+    // Hide it again
+    input.classList.remove('block');
+    input.classList.add('hidden');
   };
 
   // Helper to check and mark chosen leave type
@@ -56,6 +77,8 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
   const isVerifikatorStatus = (status: string) => {
     return leave.verifikatorStatus === status ? '√' : '';
   };
+
+  const displayUnit = leave.unitKerja.includes("Biro Kepegawaian") ? "Biro Kepegawaian, Organisasi, dan Tata Laksana" : (leave.unitKerja.startsWith("Pusat - ") ? leave.unitKerja.substring(8) : leave.unitKerja);
 
   const isPimpinanStatus = (status: string) => {
     return leave.pimpinanStatus === status ? '√' : '';
@@ -100,7 +123,7 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
               <div className="mb-6 text-xs text-left max-w-lg">
                 <p>
                   Yth. {leave.pimpinanJabatan?.split('(')[0]} 
-                  {isSameUnit(leave.unitKerja, leave.pimpinanJabatan || '') || (leave.pimpinanJabatan && leave.unitKerja && leave.pimpinanJabatan.toLowerCase().replace(/[,.-]/g, '').includes(leave.unitKerja.toLowerCase().replace(/[,.-]/g, '')))
+                  {isSameUnit(leave.unitKerja, leave.pimpinanJabatan || '')
                     ? ` melalui ${leave.verifikatorJabatan?.split(' (')[0] || 'Analis SDMA Ahli Madya'}` 
                     : ''
                   }
@@ -137,7 +160,7 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
                   </tr>
                   <tr className="border border-black">
                     <td className="border border-black px-2 py-1.5 font-bold">Unit Kerja</td>
-                    <td colSpan={3} className="border border-black px-2 py-1.5">{leave.unitKerja}</td>
+                    <td colSpan={3} className="border border-black px-2 py-1.5">{displayUnit}</td>
                   </tr>
                 </tbody>
               </table>
@@ -434,7 +457,7 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
 
       {/* REAL PRINT-ONLY INJECTED SECTION */}
       {/* This section will ONLY show when printing because of our src/index.css media print query! */}
-      <div className="hidden print:block bg-white p-6 w-full text-black" style={{ fontFamily: 'sans-serif' }}>
+      <div id="printable-content" className="hidden print:block bg-white p-6 w-full text-black" style={{ fontFamily: 'sans-serif' }}>
         <div className="text-black text-[11px] leading-normal">
           
 
@@ -442,7 +465,7 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
           <div className="mb-6 text-[11px] text-left max-w-lg">
             <p>
               Yth. {leave.pimpinanJabatan?.split('(')[0]} 
-              {isSameUnit(leave.unitKerja, leave.pimpinanJabatan || '') || (leave.pimpinanJabatan && leave.unitKerja && leave.pimpinanJabatan.toLowerCase().replace(/[,.-]/g, '').includes(leave.unitKerja.toLowerCase().replace(/[,.-]/g, '')))
+              {isSameUnit(leave.unitKerja, leave.pimpinanJabatan || '')
                 ? ` melalui ${leave.verifikatorJabatan?.split(' (')[0] || 'Analis SDMA Ahli Madya'}` 
                 : ''
               }
@@ -479,7 +502,7 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
               </tr>
               <tr className="border border-black">
                 <td className="border border-black px-2 py-1 font-bold">Unit Kerja</td>
-                <td colSpan={3} className="border border-black px-2 py-1">{leave.unitKerja}</td>
+                <td colSpan={3} className="border border-black px-2 py-1">{displayUnit}</td>
               </tr>
             </tbody>
           </table>

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, X, Check, Users, AlertCircle, Key, ShieldCheck } from 'lucide-react';
-import { User, UserRole, UnitKerja } from '../types';
+import { User, UserRole, UnitKerja, LeaveRequest } from '../types';
 import { 
   getUsersDirect, 
   getUnitsDirect, 
   getUserDirect, 
   saveUserDirect, 
-  deleteUserDirect 
+  deleteUserDirect,
+  getLeavesDirect
 } from '../lib/firebaseDb';
 
 interface UserManagementProps {
@@ -16,6 +17,7 @@ interface UserManagementProps {
 }
 
 export default function UserManagement({ showToast, onUsersChange, currentUser }: UserManagementProps) {
+  const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [units, setUnits] = useState<UnitKerja[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -54,6 +56,8 @@ export default function UserManagement({ showToast, onUsersChange, currentUser }
   const [eselon, setEselon] = useState('Non-Eselon');
   const [password, setPassword] = useState('basarnas123');
   const [jatahCuti, setJatahCuti] = useState<number>(12);
+  const [nMinus1, setNMinus1] = useState('');
+  const [nMinus2, setNMinus2] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
   // Custom Delete confirm modal states
@@ -63,13 +67,15 @@ export default function UserManagement({ showToast, onUsersChange, currentUser }
   const fetchUsersAndUnits = async () => {
     setIsLoading(true);
     try {
-      const [usersData, unitsData] = await Promise.all([
+      const [usersData, unitsData, leavesData] = await Promise.all([
         getUsersDirect(),
-        getUnitsDirect()
+        getUnitsDirect(),
+        getLeavesDirect()
       ]);
 
       setUsers(usersData);
       setUnits(unitsData);
+      setLeaves(leavesData);
 
       if (currentUser && currentUser.role !== 'admin') {
         setUnitKerja(currentUser.unit_kerja);
@@ -97,6 +103,8 @@ export default function UserManagement({ showToast, onUsersChange, currentUser }
     setEselon('Non-Eselon');
     setPassword('basarnas123');
     setJatahCuti(12);
+    setNMinus1('');
+    setNMinus2('');
     setFormError(null);
     setIsModalOpen(true);
   };
@@ -113,6 +121,8 @@ export default function UserManagement({ showToast, onUsersChange, currentUser }
     setEselon(user.eselon || 'Non-Eselon');
     setPassword(''); // keep blank to not change password unless typed
     setJatahCuti(user.jatah_cuti !== undefined ? user.jatah_cuti : 12);
+    setNMinus1(user.nMinus1 || '');
+    setNMinus2(user.nMinus2 || '');
     setFormError(null);
     setIsModalOpen(true);
   };
@@ -144,7 +154,9 @@ export default function UserManagement({ showToast, onUsersChange, currentUser }
           pangkatGol: pangkatGol.trim(),
           eselon,
           password: password.trim() || 'basarnas123',
-          jatah_cuti: Number(jatahCuti)
+          jatah_cuti: Number(jatahCuti),
+          nMinus1: nMinus1.trim(),
+          nMinus2: nMinus2.trim()
         };
       } else {
         const existing = await getUserDirect(selectedUser?.nip || '');
@@ -160,7 +172,9 @@ export default function UserManagement({ showToast, onUsersChange, currentUser }
           jabatan: jabatan.trim(),
           pangkatGol: pangkatGol.trim(),
           eselon,
-          jatah_cuti: Number(jatahCuti)
+          jatah_cuti: Number(jatahCuti),
+          nMinus1: nMinus1.trim(),
+          nMinus2: nMinus2.trim()
         };
         if (password.trim()) {
           finalUser.password = password.trim();
@@ -334,17 +348,20 @@ export default function UserManagement({ showToast, onUsersChange, currentUser }
                 <th className="px-4 py-3.5">Nama Pegawai</th>
                 <th className="px-4 py-3.5">Golongan & Jabatan</th>
                 <th className="px-4 py-3.5">Unit Kerja</th>
+                <th className="px-4 py-3.5 text-center">Sisa Cuti</th>
+                <th className="px-4 py-3.5 text-center">N-1</th>
+                <th className="px-4 py-3.5 text-center">N-2</th>
                 <th className="px-4 py-3.5 text-center">Role</th>
                 <th className="px-4 py-3.5 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {currentUsers.map((u) => (
-                <tr key={u.nip} className="hover:bg-slate-50/50 transition-colors">
+                  <tr key={u.nip} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-4 py-3 font-mono font-bold text-slate-600">{u.nip}</td>
                   <td className="px-4 py-3">
                     <p className="font-bold text-slate-900">{u.nama}</p>
-                    <p className="text-[10px] text-slate-400 font-medium">Eselon: {u.eselon || 'Non-Eselon'} • Jatah Cuti: {u.jatah_cuti !== undefined ? u.jatah_cuti : 12} Hari</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Eselon: {u.eselon || 'Non-Eselon'}</p>
                   </td>
                   <td className="px-4 py-3">
                     <p className="font-medium text-slate-800">{u.jabatan}</p>
@@ -352,7 +369,16 @@ export default function UserManagement({ showToast, onUsersChange, currentUser }
                       <p className="text-[10px] font-mono text-blue-600 font-semibold bg-blue-50 inline-block px-1.5 py-0.5 rounded-md mt-0.5">{u.pangkatGol}</p>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-slate-600 font-medium">{u.unit_kerja}</td>
+                  <td className="px-4 py-3 text-slate-600 font-medium">{units.find(un => un.nama.includes(u.unit_kerja))?.nama || u.unit_kerja}</td>
+                  <td className="px-4 py-3 text-center font-mono font-bold text-slate-700">
+                    {(u.jatah_cuti !== undefined ? u.jatah_cuti : 12) - (leaves || []).filter(l => l.nip === u.nip && l.status === 'disetujui' && l.jenisCuti === 'tahunan').reduce((acc, curr) => acc + (curr.lamaHari || 0), 0)}
+                  </td>
+                  <td className="px-4 py-3 text-center font-mono font-bold text-slate-700">
+                    {u.nMinus1 || '-'}
+                  </td>
+                  <td className="px-4 py-3 text-center font-mono font-bold text-slate-700">
+                    {u.nMinus2 || '-'}
+                  </td>
                   <td className="px-4 py-3 text-center">{getRoleBadge(u.role)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center space-x-2">
@@ -619,6 +645,30 @@ export default function UserManagement({ showToast, onUsersChange, currentUser }
                       max={90}
                       value={jatahCuti}
                       onChange={(e) => setJatahCuti(Number(e.target.value))}
+                      className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all text-slate-800"
+                      disabled={isLoading}
+                    />
+                  </div>
+                  
+                  {/* N-1 */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Sisa Cuti N-1</label>
+                    <input
+                      type="text"
+                      value={nMinus1}
+                      onChange={(e) => setNMinus1(e.target.value)}
+                      className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all text-slate-800"
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  {/* N-2 */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Sisa Cuti N-2</label>
+                    <input
+                      type="text"
+                      value={nMinus2}
+                      onChange={(e) => setNMinus2(e.target.value)}
                       className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all text-slate-800"
                       disabled={isLoading}
                     />
