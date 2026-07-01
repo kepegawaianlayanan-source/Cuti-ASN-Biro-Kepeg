@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
+import React, { useState } from 'react';
 import { LeaveRequest } from '../types';
-import { Printer, Download, X, Check } from 'lucide-react';
+import { Printer, X, Download } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import { toPng } from 'html-to-image';
 
 interface LeaveReportProps {
   leave: LeaveRequest;
@@ -44,32 +44,56 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
     return wordsA.some(word => wordsB.includes(word));
   };
 
-  const handlePrint = async (e: React.MouseEvent) => {
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const handlePrint = (e: React.MouseEvent) => {
     e.preventDefault();
-    const input = document.getElementById('printable-content') as HTMLElement;
-    if (!input) return;
+    window.print();
+  };
+
+  const handleDownloadPDF = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    const element = document.getElementById('printable-content');
+    if (!element) return;
     
-    // Temporarily show the element
-    input.style.display = 'block';
+    setIsDownloading(true);
     
-    // Add a slight delay to ensure rendering
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    const canvas = await html2canvas(input, { 
-      scale: 2,
-      useCORS: true,
-    });
-    
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-    
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`Formulir_Cuti_${leave.nama.replace(/\s+/g, '_')}.pdf`);
-    
-    // Hide it again
-    input.style.display = 'none';
+    try {
+      // Small timeout to let UI settle
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Get exact dimensions of the printable content
+      const width = element.offsetWidth || 794;
+      const height = element.offsetHeight || 1123;
+      
+      const dataUrl = await toPng(element, {
+        width: width,
+        height: height,
+        quality: 1,
+        pixelRatio: 2,
+        cacheBust: true,
+        backgroundColor: '#ffffff',
+        style: {
+          transform: 'none',
+          boxShadow: 'none',
+          border: 'none',
+          margin: '0',
+        }
+      });
+      
+      const pdf = new jsPDF('p', 'mm', [215, 330]);
+      const pdfWidth = 215;
+      const pdfHeight = 330;
+      
+      // Add image scaled exactly to fit the F4 page boundaries (215mm x 330mm)
+      pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Formulir_Cuti_${leave.nama.replace(/\s+/g, '_')}.pdf`);
+    } catch (error) {
+      console.error('Gagal mengunduh PDF:', error);
+      alert('Gagal mengunduh PDF. Silakan coba klik tombol "Cetak Formulir (F4)" lalu pilih opsi "Simpan sebagai PDF" di browser Anda.');
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   // Helper to check and mark chosen leave type
@@ -101,11 +125,33 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
           <div className="flex items-center space-x-3">
             <button
               type="button"
+              onClick={handleDownloadPDF}
+              disabled={isDownloading}
+              className={`px-4 py-2 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center space-x-1.5 ${
+                isDownloading 
+                  ? 'bg-slate-400 cursor-not-allowed' 
+                  : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/10 hover:shadow-lg'
+              }`}
+            >
+              {isDownloading ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                  <span>Mengunduh...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  <span>Unduh PDF</span>
+                </>
+              )}
+            </button>
+            <button
+              type="button"
               onClick={handlePrint}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/10 hover:shadow-lg transition-all flex items-center space-x-1.5"
             >
-              <Printer className="w-4.5 h-4.5" />
-              <span>Cetak / Unduh PDF</span>
+              <Printer className="w-4 h-4" />
+              <span>Cetak Formulir</span>
             </button>
             <button
               onClick={onClose}
@@ -118,7 +164,7 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
 
         {/* Outer Scroll Area inside Modal for Preview */}
         <div className="p-6 md:p-12 overflow-x-auto bg-slate-100/50 flex justify-center no-print">
-          <div className="bg-white p-8 border border-slate-300 shadow-lg print-container" style={{ width: '210mm', minHeight: '297mm', color: '#000000', fontFamily: 'sans-serif' }}>
+          <div id="printable-content" className="bg-white p-8 border border-slate-300 shadow-lg print-container" style={{ width: '215mm', minHeight: '330mm', color: '#000000', fontFamily: 'sans-serif' }}>
             
             {/* REAL PRINT VIEW INJECTED HERE */}
             <div className="text-black text-xs leading-normal">
@@ -298,6 +344,7 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
                             alt="Tanda Tangan Pemohon" 
                             className="max-h-16 max-w-[140px] object-contain" 
                             referrerPolicy="no-referrer"
+                            crossOrigin="anonymous"
                           />
                         ) : (
                           <div className="text-slate-300 italic text-[8px] border border-dashed border-slate-200 px-2 py-1 rounded">[Belum Ditandatangani]</div>
@@ -343,6 +390,7 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
                             alt="Tanda Tangan Verifikator" 
                             className="max-h-12 max-w-[140px] object-contain" 
                             referrerPolicy="no-referrer"
+                            crossOrigin="anonymous"
                           />
                         ) : (
                           leave.verifikatorStatus && <div className="text-slate-300 italic text-[8px]">[Telah Diverifikasi]</div>
@@ -738,6 +786,7 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
                         alt="Tanda Tangan Pimpinan" 
                         className="max-h-12 max-w-[140px] object-contain" 
                         referrerPolicy="no-referrer"
+                        crossOrigin="anonymous"
                       />
                     ) : (
                       leave.pimpinanStatus && <div className="text-slate-300 italic text-[8px]">[Telah Disetujui]</div>
@@ -754,6 +803,7 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
                         alt="QR Code Verifikasi" 
                         className="w-10 h-10" 
                         referrerPolicy="no-referrer"
+                        crossOrigin="anonymous"
                       />
                       <span className="text-[5px] text-slate-500 font-bold leading-none mt-0.5 uppercase tracking-wide">VERIFIKASI ASLI</span>
                     </div>

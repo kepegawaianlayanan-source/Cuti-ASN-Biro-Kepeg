@@ -16,7 +16,7 @@ body {
 /* Custom print layouts for official leave form */
 @media print {
   @page {
-    size: A4;
+    size: 215mm 330mm;
     margin: 10mm;
   }
   
