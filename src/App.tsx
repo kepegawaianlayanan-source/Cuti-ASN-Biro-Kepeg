@@ -690,21 +690,25 @@ export default function App() {
             )}
 
             {/* Administrative actions for Demo review */}
-            {user.role === 'admin' && (
+            {(user.role === 'admin' || user.role === 'verifikator' || user.role === 'pimpinan') && (
               <div className="pt-6 border-t border-slate-800 mt-6 space-y-2">
-                <span className="px-4 text-[9px] font-bold text-slate-500 uppercase tracking-widest">Sistem Admin</span>
+                <span className="px-4 text-[9px] font-bold text-slate-500 uppercase tracking-widest">
+                  {user.role === 'admin' ? 'Sistem Admin' : 'Manajemen Satker'}
+                </span>
                 
-                <button
-                  onClick={() => setActiveTab('unit_kerja')}
-                  className={`w-full text-left px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center space-x-3 transition-all ${
-                    activeTab === 'unit_kerja'
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                  }`}
-                >
-                  <Landmark className="w-4 h-4" />
-                  <span>Master Unit Kerja</span>
-                </button>
+                {user.role === 'admin' && (
+                  <button
+                    onClick={() => setActiveTab('unit_kerja')}
+                    className={`w-full text-left px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center space-x-3 transition-all ${
+                      activeTab === 'unit_kerja'
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                        : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                    }`}
+                  >
+                    <Landmark className="w-4 h-4" />
+                    <span>Master Unit Kerja</span>
+                  </button>
+                )}
 
                 <button
                   onClick={() => setActiveTab('manajemen_user')}
@@ -724,20 +728,22 @@ export default function App() {
                     activeTab === 'manajemen_cuti'
                       ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
                       : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                  }`}
+                    }`}
                 >
                   <FileText className="w-4 h-4" />
                   <span>Manajemen Cuti Pegawai</span>
                 </button>
 
-                <button
-                  onClick={handleResetSystem}
-                  disabled={isAdminResetting}
-                  className="w-full text-left px-4 py-2 rounded-xl text-xs font-bold text-red-400 hover:bg-red-950/20 hover:text-red-300 flex items-center space-x-3 transition-all cursor-pointer"
-                >
-                  <RefreshCw className={`w-4 h-4 ${isAdminResetting ? 'animate-spin' : ''}`} />
-                  <span>Reset Database Demo</span>
-                </button>
+                {user.role === 'admin' && (
+                  <button
+                    onClick={handleResetSystem}
+                    disabled={isAdminResetting}
+                    className="w-full text-left px-4 py-2 rounded-xl text-xs font-bold text-red-400 hover:bg-red-950/20 hover:text-red-300 flex items-center space-x-3 transition-all cursor-pointer"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isAdminResetting ? 'animate-spin' : ''}`} />
+                    <span>Reset Database Demo</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -783,6 +789,67 @@ export default function App() {
                   </button>
                 </div>
               </div>
+
+              {/* Leave Quota and Remaining Allowance Section */}
+              {(() => {
+                const jatahCutiTahunan = user.jatah_cuti !== undefined ? user.jatah_cuti : 12;
+                const approvedAnnualDays = leaveRequests
+                  .filter(r => r.nip === user.nip && r.jenisCuti === 'tahunan' && r.status === 'disetujui')
+                  .reduce((sum, r) => sum + r.lamaHari, 0);
+                const pendingAnnualDays = leaveRequests
+                  .filter(r => r.nip === user.nip && r.jenisCuti === 'tahunan' && (r.status === 'menunggu_verifikasi' || r.status === 'menunggu_pimpinan'))
+                  .reduce((sum, r) => sum + r.lamaHari, 0);
+                const sisaCutiTahunan = Math.max(0, jatahCutiTahunan - approvedAnnualDays);
+
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Card 1: Jatah Kuota */}
+                    <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex items-center space-x-4">
+                      <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
+                        <Calendar className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Jatah Cuti Tahunan</p>
+                        <p className="text-xl font-extrabold text-slate-800 mt-1 font-mono">{jatahCutiTahunan} <span className="text-xs font-bold text-slate-500">Hari</span></p>
+                      </div>
+                    </div>
+
+                    {/* Card 2: Sudah Digunakan */}
+                    <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex items-center space-x-4">
+                      <div className="w-12 h-12 rounded-2xl bg-green-50 flex items-center justify-center text-green-600 shrink-0">
+                        <CheckCircle2 className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cuti Disetujui</p>
+                        <p className="text-xl font-extrabold text-slate-800 mt-1 font-mono">{approvedAnnualDays} <span className="text-xs font-bold text-slate-500">Hari</span></p>
+                      </div>
+                    </div>
+
+                    {/* Card 3: Menunggu Persetujuan */}
+                    <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex items-center space-x-4">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
+                        <Clock className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Dalam Proses</p>
+                        <p className="text-xl font-extrabold text-slate-800 mt-1 font-mono">{pendingAnnualDays} <span className="text-xs font-bold text-slate-500">Hari</span></p>
+                      </div>
+                    </div>
+
+                    {/* Card 4: Sisa Kuota */}
+                    <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800 shadow-sm flex items-center space-x-4 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-blue-600/10 rounded-full blur-2xl pointer-events-none"></div>
+                      <div className="w-12 h-12 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0 z-10">
+                        <FileText className="w-6 h-6" />
+                      </div>
+                      <div className="z-10">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sisa Kuota Bersih</p>
+                        <p className="text-xl font-extrabold text-blue-400 mt-1 font-mono">{sisaCutiTahunan} <span className="text-xs font-bold text-blue-300">Hari</span></p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Personal Leave History */}
               <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
@@ -1084,14 +1151,14 @@ export default function App() {
             <UnitKerjaManagement showToast={showToast} />
           )}
 
-          {/* TAB 6: USER MANAGEMENT (ADMIN ONLY) */}
-          {activeTab === 'manajemen_user' && user?.role === 'admin' && (
-            <UserManagement showToast={showToast} />
+          {/* TAB 6: USER MANAGEMENT */}
+          {activeTab === 'manajemen_user' && (user?.role === 'admin' || user?.role === 'verifikator' || user?.role === 'pimpinan') && (
+            <UserManagement showToast={showToast} currentUser={user} />
           )}
 
-          {/* TAB 7: LEAVE MANAGEMENT (ADMIN ONLY) */}
-          {activeTab === 'manajemen_cuti' && user?.role === 'admin' && (
-            <LeaveManagement showToast={showToast} onLeavesChange={fetchLeaves} />
+          {/* TAB 7: LEAVE MANAGEMENT */}
+          {activeTab === 'manajemen_cuti' && (user?.role === 'admin' || user?.role === 'verifikator' || user?.role === 'pimpinan') && (
+            <LeaveManagement showToast={showToast} onLeavesChange={fetchLeaves} currentUser={user} />
           )}
 
         </main>

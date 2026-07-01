@@ -5,13 +5,29 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, LeaveType, CatatanCuti, LeaveRequest } from '../types';
-import { FileText, Send, Calendar, MapPin, Phone, HelpCircle, Loader2, RefreshCw } from 'lucide-react';
-import { getUsersDirect, saveLeaveDirect, triggerNotificationDirect } from '../lib/firebaseDb';
+import { FileText, Send, Calendar, MapPin, Phone, HelpCircle, Loader2, RefreshCw, Building2, Globe } from 'lucide-react';
+import { getUsersDirect, saveLeaveDirect, triggerNotificationDirect, getLeavesDirect } from '../lib/firebaseDb';
 
 interface LeaveFormProps {
   user: User;
   onSuccess: (newLeave?: any) => void;
 }
+
+// Helper to compare unit_kerja flexibly and robustly (e.g., treating "Pusat - Biro Kepegawaian" and "Pusat - Biro Kepegawaian, Organisasi, dan Tata Laksana" as identical)
+const isSameUnit = (unitA: string, unitB: string): boolean => {
+  if (!unitA || !unitB) return false;
+  if (unitA === unitB) return true;
+  
+  const normalize = (s: string) => {
+    let res = s.toLowerCase().replace(/\s+/g, '').replace(/[,.-]/g, '');
+    if (res.includes("birokepegawaian")) {
+      return "birokepegawaian";
+    }
+    return res;
+  };
+  
+  return normalize(unitA) === normalize(unitB);
+};
 
 export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
   const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -29,6 +45,12 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
   const [telepon, setTelepon] = useState('');
   const [verifikatorNip, setVerifikatorNip] = useState('');
   const [pimpinanNip, setPimpinanNip] = useState('');
+  const [approvalScope, setApprovalScope] = useState<'internal' | 'external'>('internal');
+
+  // Allowance stats states
+  const [totalJatah, setTotalJatah] = useState<number>(12);
+  const [approvedTahunan, setApprovedTahunan] = useState<number>(0);
+  const [remainingTahunan, setRemainingTahunan] = useState<number>(12);
 
   // Catatan Cuti (Balances)
   const [catatanCuti, setCatatanCuti] = useState<CatatanCuti>({
@@ -75,6 +97,68 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
     fetchUsers();
   }, [user]);
 
+  // Fetch and calculate remaining leave allowance
+  useEffect(() => {
+    async function fetchUserLeaves() {
+      try {
+        const leavesData = await getLeavesDirect(user.nip, 'pegawai');
+        const approved = leavesData
+          .filter(l => l.jenisCuti === 'tahunan' && l.status === 'disetujui')
+          .reduce((sum, l) => sum + l.lamaHari, 0);
+        setApprovedTahunan(approved);
+        
+        const jatah = user.jatah_cuti !== undefined ? user.jatah_cuti : 12;
+        const sisa = Math.max(0, jatah - approved);
+        setRemainingTahunan(sisa);
+        setTotalJatah(jatah);
+      } catch (err) {
+        console.error("Error fetching user leaves in form:", err);
+      }
+    }
+    fetchUserLeaves();
+  }, [user]);
+
+  // Automatically update selected verifikator and pimpinan based on approvalScope and lists
+  useEffect(() => {
+    if (allUsers.length === 0) return;
+
+    const filteredVerif = allUsers.filter(u => {
+      if (u.role !== 'verifikator') return false;
+      if (approvalScope === 'internal') {
+        return isSameUnit(u.unit_kerja, user.unit_kerja);
+      }
+      return true;
+    });
+
+    const filteredPimp = allUsers.filter(u => {
+      if (u.role !== 'pimpinan') return false;
+      if (approvalScope === 'internal') {
+        return isSameUnit(u.unit_kerja, user.unit_kerja);
+      }
+      return true;
+    });
+
+    if (filteredVerif.length > 0) {
+      const isValid = filteredVerif.some(v => v.nip === verifikatorNip);
+      if (!isValid) {
+        const sameUnit = filteredVerif.find(v => isSameUnit(v.unit_kerja, user.unit_kerja));
+        setVerifikatorNip(sameUnit ? sameUnit.nip : filteredVerif[0].nip);
+      }
+    } else {
+      setVerifikatorNip('');
+    }
+
+    if (filteredPimp.length > 0) {
+      const isValid = filteredPimp.some(l => l.nip === pimpinanNip);
+      if (!isValid) {
+        const sameUnit = filteredPimp.find(l => isSameUnit(l.unit_kerja, user.unit_kerja));
+        setPimpinanNip(sameUnit ? sameUnit.nip : filteredPimp[0].nip);
+      }
+    } else {
+      setPimpinanNip('');
+    }
+  }, [approvalScope, allUsers, user.unit_kerja]);
+
   // Adjust catatanCuti fields based on selected jenisCuti as default guidance
   useEffect(() => {
     // If they change leave type, set some demo/sensible default notes to help them
@@ -82,7 +166,7 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
     if (jenisCuti !== 'tahunan') {
       newCatatan.tahunan = { nMinus2: '-', nMinus1: '-', n: '-' };
     } else {
-      newCatatan.tahunan = { nMinus2: '-', nMinus1: '-', n: '12' };
+      newCatatan.tahunan = { nMinus2: '-', nMinus1: '-', n: remainingTahunan.toString() };
     }
     
     // Set active field based on selection
@@ -93,7 +177,7 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
     newCatatan.luarTanggungan = jenisCuti === 'luar_tanggungan' ? 'Tersedia' : '-';
 
     setCatatanCuti(newCatatan);
-  }, [jenisCuti]);
+  }, [jenisCuti, remainingTahunan]);
 
   // Automatically calculate lamaHari from tanggalMulai and tanggalSelesai
   useEffect(() => {
@@ -191,8 +275,21 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
     }
   };
 
-  const verifiers = allUsers.filter(u => u.role === 'verifikator');
-  const leaders = allUsers.filter(u => u.role === 'pimpinan');
+  const verifiers = allUsers.filter(u => {
+    if (u.role !== 'verifikator') return false;
+    if (approvalScope === 'internal') {
+      return isSameUnit(u.unit_kerja, user.unit_kerja);
+    }
+    return true;
+  });
+
+  const leaders = allUsers.filter(u => {
+    if (u.role !== 'pimpinan') return false;
+    if (approvalScope === 'internal') {
+      return isSameUnit(u.unit_kerja, user.unit_kerja);
+    }
+    return true;
+  });
 
   return (
     <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 lg:p-8">
@@ -284,6 +381,26 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
               </label>
             ))}
           </div>
+
+          {jenisCuti === 'tahunan' && (
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-600 font-bold shrink-0">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-blue-900">Sisa Kuota Cuti Tahunan Anda</p>
+                  <p className="text-[10px] text-blue-600 mt-0.5">
+                    Jatah: <span className="font-semibold">{totalJatah} Hari</span> | Terpakai: <span className="font-semibold">{approvedTahunan} Hari</span>
+                  </p>
+                </div>
+              </div>
+              <div className="text-right self-stretch sm:self-auto flex sm:flex-col justify-between sm:justify-center items-center sm:items-end border-t sm:border-t-0 pt-2 sm:pt-0 border-blue-100">
+                <span className="text-[10px] sm:hidden text-blue-700 font-medium">Sisa Kuota:</span>
+                <span className="text-sm font-extrabold text-blue-600 font-mono bg-white sm:bg-transparent px-3 py-1 sm:p-0 rounded-lg border sm:border-0 border-blue-200">{remainingTahunan} Hari</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* III. ALASAN CUTI */}
@@ -347,6 +464,15 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
               </div>
             </div>
           </div>
+
+          {jenisCuti === 'tahunan' && lamaHari > remainingTahunan && (
+            <div className="mt-3 p-3.5 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-2xl flex items-start space-x-2.5 animate-in fade-in duration-200">
+              <span className="text-base shrink-0 select-none">⚠️</span>
+              <div>
+                <span className="font-bold">Perhatian:</span> Jumlah hari cuti yang diajukan (<span className="font-semibold">{lamaHari} Hari</span>) melebihi sisa kuota Cuti Tahunan Anda (<span className="font-semibold">{remainingTahunan} Hari</span>). Pengajuan ini kemungkinan akan ditolak oleh verifikator atau pimpinan Anda.
+              </div>
+            </div>
+          )}
         </div>
 
         {/* V. CATATAN CUTI */}
@@ -492,9 +618,39 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
 
         {/* VII & VIII. ALUR PERSETUJUAN BERJENJANG */}
         <div>
-          <div className="flex items-center space-x-2 mb-4">
-            <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">N</span>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-blue-600">ALUR PERSETUJUAN BERJENJANG *</h4>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 flex-wrap">
+            <div className="flex items-center space-x-2">
+              <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">N</span>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-blue-600">ALUR PERSETUJUAN BERJENJANG *</h4>
+            </div>
+            
+            {/* Scope Switcher Segment */}
+            <div className="flex bg-slate-100 border border-slate-200/80 p-0.5 rounded-xl self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setApprovalScope('internal')}
+                className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  approvalScope === 'internal'
+                    ? 'bg-white text-blue-600 shadow-sm border border-slate-200/20'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                <span>Satu Unit Kerja ({user.unit_kerja})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setApprovalScope('external')}
+                className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  approvalScope === 'external'
+                    ? 'bg-white text-blue-600 shadow-sm border border-slate-200/20'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>Lintas Unit Kerja</span>
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-blue-500/[0.02] border border-blue-500/10 p-5 rounded-2xl">
@@ -508,6 +664,10 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
                   <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
                   <span>Memuat daftar verifikator...</span>
                 </div>
+              ) : verifiers.length === 0 ? (
+                <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] rounded-xl font-medium leading-relaxed">
+                  Tidak ada Verifikator di unit kerja <span className="font-bold">{user.unit_kerja}</span>. Silakan gunakan tab <span className="font-bold">"Lintas Unit Kerja"</span> di atas.
+                </div>
               ) : (
                 <select
                   required
@@ -518,7 +678,7 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
                   <option value="">-- Pilih Atasan Langsung (Verifikator) --</option>
                   {verifiers.map((v) => (
                     <option key={v.nip} value={v.nip}>
-                      {v.nama} - {v.jabatan.split(' (E')[0]} ({v.nip})
+                      {v.nama} - {v.jabatan.split(' (E')[0]} ({v.nip}){approvalScope === 'external' ? ` [Unit: ${v.unit_kerja}]` : ''}
                     </option>
                   ))}
                 </select>
@@ -538,6 +698,10 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
                   <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
                   <span>Memuat daftar pimpinan...</span>
                 </div>
+              ) : leaders.length === 0 ? (
+                <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] rounded-xl font-medium leading-relaxed">
+                  Tidak ada Pimpinan di unit kerja <span className="font-bold">{user.unit_kerja}</span>. Silakan gunakan tab <span className="font-bold">"Lintas Unit Kerja"</span> di atas.
+                </div>
               ) : (
                 <select
                   required
@@ -548,7 +712,7 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
                   <option value="">-- Pilih Pejabat Berwenang (Pimpinan) --</option>
                   {leaders.map((l) => (
                     <option key={l.nip} value={l.nip}>
-                      {l.nama} - {l.jabatan} ({l.nip})
+                      {l.nama} - {l.jabatan} ({l.nip}){approvalScope === 'external' ? ` [Unit: ${l.unit_kerja}]` : ''}
                     </option>
                   ))}
                 </select>

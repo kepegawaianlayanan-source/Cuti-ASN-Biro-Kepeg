@@ -27,7 +27,7 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
     { role: 'verifikator', nip: '5555', nama: 'Rian Hermawan, S.Kom.', jabatan: 'Kasubag Umum & Kepegawaian', dept: 'Kantor SAR Jakarta' },
     { role: 'pimpinan', nip: '196610071994031001', nama: 'Drs. MOCHAMAD HERNANTO M.M.', jabatan: 'Kepala Biro Kepegawaian, Organisasi, dan Tata Laksana', dept: 'Biro Kepegawaian, Organisasi, dan Tata Laksana' },
     { role: 'pimpinan', nip: '1111', nama: 'Marsekal Madya Kusworo, S.E.', jabatan: 'Kepala Basarnas', dept: 'Pusat - Kepala Basarnas' },
-    { role: 'admin', nip: '7777', nama: 'Pranata Komputer Admin', jabatan: 'Admin Sistem Kepegawaian Utama', dept: 'Biro Kepegawaian' },
+    { role: 'admin', nip: '7777', nama: 'Pranata Komputer Admin', jabatan: 'Admin Sistem Kepegawaian Utama', dept: 'Biro Kepegawaian, Organisasi, dan Tata Laksana' },
   ];
 
   const handleSubmit = async (e: React.FormEvent) => {

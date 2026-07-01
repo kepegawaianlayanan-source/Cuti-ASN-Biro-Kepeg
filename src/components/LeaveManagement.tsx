@@ -12,9 +12,10 @@ import {
 interface LeaveManagementProps {
   showToast: (message: string, type: 'success' | 'error') => void;
   onLeavesChange?: () => void;
+  currentUser?: User;
 }
 
-export default function LeaveManagement({ showToast, onLeavesChange }: LeaveManagementProps) {
+export default function LeaveManagement({ showToast, onLeavesChange, currentUser }: LeaveManagementProps) {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [units, setUnits] = useState<UnitKerja[]>([]);
@@ -27,6 +28,13 @@ export default function LeaveManagement({ showToast, onLeavesChange }: LeaveMana
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Set unit filter for verifikator/pimpinan on mount/change
+  useEffect(() => {
+    if (currentUser && currentUser.role !== 'admin') {
+      setSelectedUnitFilter(currentUser.unit_kerja);
+    }
+  }, [currentUser]);
 
   // Reset page on filter change
   useEffect(() => {
@@ -61,21 +69,28 @@ export default function LeaveManagement({ showToast, onLeavesChange }: LeaveMana
   const fetchLeavesAndUsers = async () => {
     setIsLoading(true);
     try {
+      const nipParam = currentUser?.nip || '7777';
+      const roleParam = currentUser?.role || 'admin';
       const [leavesData, usersData, unitsData] = await Promise.all([
-        getLeavesDirect('7777', 'admin'),
+        getLeavesDirect(nipParam, roleParam),
         getUsersDirect(),
         getUnitsDirect()
       ]);
 
+      let filteredUsersData = usersData;
+      if (currentUser && currentUser.role !== 'admin') {
+        filteredUsersData = usersData.filter((u: User) => u.unit_kerja === currentUser.unit_kerja);
+      }
+
       setLeaves(leavesData);
-      setUsers(usersData);
+      setUsers(filteredUsersData);
       setUnits(unitsData);
 
       // Set default employee selection in form
-      if (usersData.length > 0) {
+      if (filteredUsersData.length > 0) {
         // Select first non-admin if possible
-        const nonAdmin = usersData.find((u: User) => u.role !== 'admin');
-        setSelectedNip(nonAdmin ? nonAdmin.nip : usersData[0].nip);
+        const nonAdmin = filteredUsersData.find((u: User) => u.role !== 'admin');
+        setSelectedNip(nonAdmin ? nonAdmin.nip : filteredUsersData[0].nip);
       }
     } catch (err: any) {
       showToast(err.message || 'Gagal memuat data.', 'error');
@@ -328,9 +343,13 @@ export default function LeaveManagement({ showToast, onLeavesChange }: LeaveMana
         <div>
           <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2">
             <FileText className="w-5 h-5 text-blue-600" />
-            <span>Manajemen Pengajuan Cuti (Admin)</span>
+            <span>Manajemen Pengajuan Cuti {currentUser?.role === 'admin' ? '(Admin)' : `(${currentUser?.role === 'verifikator' ? 'Atasan Langsung' : 'Pejabat Berwenang'})`}</span>
           </h3>
-          <p className="text-xs text-slate-500 mt-1">Daftar global, input manual data cuti, serta penataan riwayat cuti pegawai</p>
+          <p className="text-xs text-slate-500 mt-1">
+            {currentUser?.role === 'admin' 
+              ? 'Daftar global, input manual data cuti, serta penataan riwayat cuti pegawai' 
+              : `Daftar pengajuan cuti, input manual data cuti, serta penataan riwayat cuti pegawai di ${currentUser?.unit_kerja}`}
+          </p>
         </div>
         <button
           onClick={handleOpenAdd}
@@ -359,7 +378,8 @@ export default function LeaveManagement({ showToast, onLeavesChange }: LeaveMana
           <select
             value={selectedUnitFilter}
             onChange={(e) => setSelectedUnitFilter(e.target.value)}
-            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none bg-white text-slate-700 font-semibold"
+            disabled={currentUser && currentUser.role !== 'admin'}
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none bg-white text-slate-700 font-semibold disabled:bg-slate-50 disabled:text-slate-400"
           >
             <option value="all">Semua Unit Kerja</option>
             {units.map((u) => (

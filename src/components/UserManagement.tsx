@@ -12,9 +12,10 @@ import {
 interface UserManagementProps {
   showToast: (message: string, type: 'success' | 'error') => void;
   onUsersChange?: () => void;
+  currentUser?: User;
 }
 
-export default function UserManagement({ showToast, onUsersChange }: UserManagementProps) {
+export default function UserManagement({ showToast, onUsersChange, currentUser }: UserManagementProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [units, setUnits] = useState<UnitKerja[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -25,6 +26,13 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Set unit filter for verifikator/pimpinan on mount/change
+  useEffect(() => {
+    if (currentUser && currentUser.role !== 'admin') {
+      setSelectedUnitFilter(currentUser.unit_kerja);
+    }
+  }, [currentUser]);
 
   // Reset page on filter change
   useEffect(() => {
@@ -45,6 +53,7 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
   const [pangkatGol, setPangkatGol] = useState('');
   const [eselon, setEselon] = useState('Non-Eselon');
   const [password, setPassword] = useState('basarnas123');
+  const [jatahCuti, setJatahCuti] = useState<number>(12);
   const [formError, setFormError] = useState<string | null>(null);
 
   // Custom Delete confirm modal states
@@ -61,6 +70,10 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
 
       setUsers(usersData);
       setUnits(unitsData);
+
+      if (currentUser && currentUser.role !== 'admin') {
+        setUnitKerja(currentUser.unit_kerja);
+      }
     } catch (err: any) {
       showToast(err.message || 'Gagal memuat data', 'error');
     } finally {
@@ -78,11 +91,12 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
     setNip('');
     setNama('');
     setRole('pegawai');
-    setUnitKerja(units.length > 0 ? units[0].nama : '');
+    setUnitKerja(currentUser && currentUser.role !== 'admin' ? currentUser.unit_kerja : (units.length > 0 ? units[0].nama : ''));
     setJabatan('');
     setPangkatGol('');
     setEselon('Non-Eselon');
     setPassword('basarnas123');
+    setJatahCuti(12);
     setFormError(null);
     setIsModalOpen(true);
   };
@@ -98,13 +112,16 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
     setPangkatGol(user.pangkatGol || '');
     setEselon(user.eselon || 'Non-Eselon');
     setPassword(''); // keep blank to not change password unless typed
+    setJatahCuti(user.jatah_cuti !== undefined ? user.jatah_cuti : 12);
     setFormError(null);
     setIsModalOpen(true);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nip.trim() || !nama.trim() || !unitKerja || !jabatan.trim()) {
+    const resolvedUnitKerja = (currentUser && currentUser.role !== 'admin') ? currentUser.unit_kerja : unitKerja;
+
+    if (!nip.trim() || !nama.trim() || !resolvedUnitKerja || !jabatan.trim()) {
       setFormError('Kolom NIP, Nama, Unit Kerja, dan Jabatan wajib diisi.');
       return;
     }
@@ -122,11 +139,12 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
           nip: nip.trim(),
           nama: nama.trim(),
           role,
-          unit_kerja: unitKerja,
+          unit_kerja: resolvedUnitKerja,
           jabatan: jabatan.trim(),
           pangkatGol: pangkatGol.trim(),
           eselon,
-          password: password.trim() || 'basarnas123'
+          password: password.trim() || 'basarnas123',
+          jatah_cuti: Number(jatahCuti)
         };
       } else {
         const existing = await getUserDirect(selectedUser?.nip || '');
@@ -138,10 +156,11 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
           nip: nip.trim(),
           nama: nama.trim(),
           role,
-          unit_kerja: unitKerja,
+          unit_kerja: resolvedUnitKerja,
           jabatan: jabatan.trim(),
           pangkatGol: pangkatGol.trim(),
           eselon,
+          jatah_cuti: Number(jatahCuti)
         };
         if (password.trim()) {
           finalUser.password = password.trim();
@@ -195,6 +214,13 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
   };
 
   const filteredUsers = users.filter(u => {
+    // If verifikator or pimpinan, restrict to their unit_kerja
+    if (currentUser && currentUser.role !== 'admin') {
+      if (normalizeUnitName(u.unit_kerja) !== normalizeUnitName(currentUser.unit_kerja)) {
+        return false;
+      }
+    }
+
     const matchSearch = 
       u.nama.toLowerCase().includes(searchQuery.toLowerCase()) || 
       u.nip.includes(searchQuery) ||
@@ -264,7 +290,8 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
           <select
             value={selectedUnitFilter}
             onChange={(e) => setSelectedUnitFilter(e.target.value)}
-            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none bg-white text-slate-700"
+            disabled={currentUser && currentUser.role !== 'admin'}
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none bg-white text-slate-700 disabled:bg-slate-50 disabled:text-slate-400 font-medium"
           >
             <option value="all">Semua Unit Kerja</option>
             {units.map((u) => (
@@ -317,7 +344,7 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
                   <td className="px-4 py-3 font-mono font-bold text-slate-600">{u.nip}</td>
                   <td className="px-4 py-3">
                     <p className="font-bold text-slate-900">{u.nama}</p>
-                    <p className="text-[10px] text-slate-400 font-medium">Eselon: {u.eselon || 'Non-Eselon'}</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Eselon: {u.eselon || 'Non-Eselon'} • Jatah Cuti: {u.jatah_cuti !== undefined ? u.jatah_cuti : 12} Hari</p>
                   </td>
                   <td className="px-4 py-3">
                     <p className="font-medium text-slate-800">{u.jabatan}</p>
@@ -496,7 +523,7 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
                       <option value="pegawai">Pegawai</option>
                       <option value="verifikator">Verifikator</option>
                       <option value="pimpinan">Pimpinan</option>
-                      <option value="admin">Admin</option>
+                      {(!currentUser || currentUser.role === 'admin') && <option value="admin">Admin</option>}
                     </select>
                   </div>
 
@@ -506,8 +533,8 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
                     <select
                       value={unitKerja}
                       onChange={(e) => setUnitKerja(e.target.value)}
-                      className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none bg-white text-slate-800 font-medium"
-                      disabled={isLoading}
+                      className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none bg-white text-slate-800 font-medium disabled:bg-slate-50 disabled:text-slate-400"
+                      disabled={isLoading || (currentUser && currentUser.role !== 'admin')}
                     >
                       <option value="" disabled>-- Pilih Unit Kerja --</option>
                       {units.map((unit) => (
@@ -576,6 +603,23 @@ export default function UserManagement({ showToast, onUsersChange }: UserManagem
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder={modalMode === 'add' ? 'Default: basarnas123' : 'Ketik password baru jika ingin mengubah'}
                       className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all text-slate-800 font-mono"
+                      disabled={isLoading}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Jatah Cuti Tahunan */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Jatah Cuti Tahunan (Hari)</label>
+                    <input
+                      type="number"
+                      required
+                      min={0}
+                      max={90}
+                      value={jatahCuti}
+                      onChange={(e) => setJatahCuti(Number(e.target.value))}
+                      className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all text-slate-800"
                       disabled={isLoading}
                     />
                   </div>
