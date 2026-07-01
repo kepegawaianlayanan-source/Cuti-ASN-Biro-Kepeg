@@ -28,6 +28,21 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
     }
   };
 
+  // Helper to compare unit_kerja flexibly and robustly (e.g., treating "Pusat - Biro Kepegawaian" and "Pusat - Biro Kepegawaian, Organisasi, dan Tata Laksana" as identical)
+  const isSameUnit = (unitA: string, unitB: string): boolean => {
+    if (!unitA || !unitB) return false;
+    
+    const normalize = (s: string) => {
+      let res = s.toLowerCase().replace(/\s+/g, '').replace(/[,.-]/g, '');
+      if (res.includes("birokepegawaian")) {
+        return "birokepegawaian";
+      }
+      return res;
+    };
+    
+    return normalize(unitA) === normalize(unitB);
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -80,14 +95,16 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
             {/* REAL PRINT VIEW INJECTED HERE */}
             <div className="text-black text-xs leading-normal">
               
-              {/* Header Right Location Date */}
-              <div className="text-right mb-4">
-                <p>Jakarta, {formatIndonesianDate(leave.createdAt.split('T')[0])}</p>
-              </div>
 
               {/* To Section */}
               <div className="mb-6 text-xs text-left max-w-lg">
-                <p>Yth. Kepala {leave.unitKerja.includes('Jakarta') ? 'Kantor SAR Jakarta' : 'Biro Kepegawaian, Organisasi, dan Tata Laksana'} melalui {leave.verifikatorJabatan?.split(' (')[0] || 'Analis SDMA Ahli Madya'}</p>
+                <p>
+                  Yth. {leave.pimpinanJabatan?.split('(')[0]} 
+                  {isSameUnit(leave.unitKerja, leave.pimpinanJabatan || '') || (leave.pimpinanJabatan && leave.unitKerja && leave.pimpinanJabatan.toLowerCase().replace(/[,.-]/g, '').includes(leave.unitKerja.toLowerCase().replace(/[,.-]/g, '')))
+                    ? ` melalui ${leave.verifikatorJabatan?.split(' (')[0] || 'Analis SDMA Ahli Madya'}` 
+                    : ''
+                  }
+                </p>
                 <p>Di Tempat</p>
               </div>
 
@@ -214,13 +231,13 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
                     <td colSpan={2} className="border border-black px-2 py-1 font-bold">4. CUTI MELAHIRKAN: <span className="font-normal">{leave.catatanCuti.melahirkan}</span></td>
                   </tr>
                   <tr className="border border-black">
-                    <td className="border border-black px-2 py-1 text-center">N-1 (2024)</td>
+                    <td className="border border-black px-2 py-1 text-center">N-1 (2025)</td>
                     <td className="border border-black px-2 py-1 text-center">{leave.catatanCuti.tahunan.nMinus1}</td>
                     <td className="border border-black px-2 py-1 text-center">-</td>
                     <td colSpan={2} className="border border-black px-2 py-1 font-bold">5. CUTI KARENA ALASAN PENTING: <span className="font-normal">{leave.catatanCuti.alasanPenting}</span></td>
                   </tr>
                   <tr className="border border-black">
-                    <td className="border border-black px-2 py-1 text-center font-bold">N (2025)</td>
+                    <td className="border border-black px-2 py-1 text-center font-bold">N (2026)</td>
                     <td className="border border-black px-2 py-1 text-center font-bold">{leave.catatanCuti.tahunan.n}</td>
                     <td className="border border-black px-2 py-1 text-center">-</td>
                     <td colSpan={2} className="border border-black px-2 py-1 font-bold">6. CUTI DI LUAR TANGGUNGAN NEGARA: <span className="font-normal">{leave.catatanCuti.luarTanggungan}</span></td>
@@ -420,14 +437,16 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
       <div className="hidden print:block bg-white p-6 w-full text-black" style={{ fontFamily: 'sans-serif' }}>
         <div className="text-black text-[11px] leading-normal">
           
-          {/* Header Right Location Date */}
-          <div className="text-right mb-4">
-            <p>Jakarta, {formatIndonesianDate(leave.createdAt.split('T')[0])}</p>
-          </div>
 
           {/* To Section */}
           <div className="mb-6 text-[11px] text-left max-w-lg">
-            <p>Yth. Kepala {leave.unitKerja.includes('Jakarta') ? 'Kantor SAR Jakarta' : 'Biro Kepegawaian, Organisasi, dan Tata Laksana'} melalui {leave.verifikatorJabatan?.split(' (')[0] || 'Analis SDMA Ahli Madya'}</p>
+            <p>
+              Yth. {leave.pimpinanJabatan?.split('(')[0]} 
+              {isSameUnit(leave.unitKerja, leave.pimpinanJabatan || '') || (leave.pimpinanJabatan && leave.unitKerja && leave.pimpinanJabatan.toLowerCase().replace(/[,.-]/g, '').includes(leave.unitKerja.toLowerCase().replace(/[,.-]/g, '')))
+                ? ` melalui ${leave.verifikatorJabatan?.split(' (')[0] || 'Analis SDMA Ahli Madya'}` 
+                : ''
+              }
+            </p>
             <p>Di Tempat</p>
           </div>
 
@@ -554,13 +573,13 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
                 <td colSpan={2} className="border border-black px-2 py-0.5 font-bold">4. CUTI MELAHIRKAN: <span className="font-normal">{leave.catatanCuti.melahirkan}</span></td>
               </tr>
               <tr className="border border-black">
-                <td className="border border-black px-2 py-0.5 text-center">N-1 (2024)</td>
+                <td className="border border-black px-2 py-0.5 text-center">N-1 (2025)</td>
                 <td className="border border-black px-2 py-0.5 text-center">{leave.catatanCuti.tahunan.nMinus1}</td>
                 <td className="border border-black px-2 py-0.5 text-center">-</td>
                 <td colSpan={2} className="border border-black px-2 py-0.5 font-bold">5. CUTI KARENA ALASAN PENTING: <span className="font-normal">{leave.catatanCuti.alasanPenting}</span></td>
               </tr>
               <tr className="border border-black">
-                <td className="border border-black px-2 py-0.5 text-center font-bold">N (2025)</td>
+                <td className="border border-black px-2 py-0.5 text-center font-bold">N (2026)</td>
                 <td className="border border-black px-2 py-0.5 text-center font-bold">{leave.catatanCuti.tahunan.n}</td>
                 <td className="border border-black px-2 py-0.5 text-center">-</td>
                 <td colSpan={2} className="border border-black px-2 py-0.5 font-bold">6. CUTI DI LUAR TANGGUNGAN NEGARA: <span className="font-normal">{leave.catatanCuti.luarTanggungan}</span></td>

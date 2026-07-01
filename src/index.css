@@ -15,6 +15,11 @@ body {
 
 /* Custom print layouts for official leave form */
 @media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+  
   /* Hide all interactive elements, sidebars, dashboard content */
   body {
     background-color: white !important;

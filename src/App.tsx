@@ -489,10 +489,10 @@ export default function App() {
   // Leaves needing current logged-in user action (berjenjang pipeline)
   const pendingRequestsForMe = leaveRequests.filter((req) => {
     if (user.role === 'verifikator') {
-      return req.verifikatorNip === user.nip && req.status === 'menunggu_verifikasi';
+      return req.verifikatorNip?.trim() === user.nip?.trim() && req.status === 'menunggu_verifikasi';
     }
     if (user.role === 'pimpinan') {
-      return req.pimpinanNip === user.nip && req.status === 'menunggu_pimpinan';
+      return req.pimpinanNip?.trim() === user.nip?.trim() && req.status === 'menunggu_pimpinan';
     }
     return false;
   });
@@ -500,10 +500,10 @@ export default function App() {
   // Approved leave requests history
   const actionedRequestsByMe = leaveRequests.filter((req) => {
     if (user.role === 'verifikator') {
-      return req.verifikatorNip === user.nip && req.status !== 'menunggu_verifikasi';
+      return req.verifikatorNip?.trim() === user.nip?.trim() && req.status !== 'menunggu_verifikasi';
     }
     if (user.role === 'pimpinan') {
-      return req.pimpinanNip === user.nip && req.status !== 'menunggu_pimpinan';
+      return req.pimpinanNip?.trim() === user.nip?.trim() && req.status !== 'menunggu_pimpinan';
     }
     return false;
   });

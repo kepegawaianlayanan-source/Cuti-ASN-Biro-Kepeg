@@ -179,7 +179,7 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
     setCatatanCuti(newCatatan);
   }, [jenisCuti, remainingTahunan]);
 
-  // Automatically calculate lamaHari from tanggalMulai and tanggalSelesai
+          // Automatically calculate lamaHari from tanggalMulai and tanggalSelesai
   useEffect(() => {
     if (tanggalMulai && tanggalSelesai) {
       const startParts = tanggalMulai.split('-').map(Number);
@@ -193,12 +193,20 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
           const diffTime = endDate.getTime() - startDate.getTime();
           const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
           setLamaHari(diffDays);
+          
+          if (jenisCuti === 'tahunan') {
+            const updatedSisa = Math.max(0, remainingTahunan - diffDays);
+            setCatatanCuti(prev => ({
+                ...prev,
+                tahunan: { ...prev.tahunan, n: updatedSisa.toString() }
+            }));
+          }
         } else {
           setLamaHari(1);
         }
       }
     }
-  }, [tanggalMulai, tanggalSelesai]);
+  }, [tanggalMulai, tanggalSelesai, jenisCuti, remainingTahunan]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -497,7 +505,7 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase">Cuti Tahunan N-1 (Sisa 2024)</label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase">Cuti Tahunan N-1 (Sisa 2025)</label>
                 <input
                   type="text"
                   value={catatanCuti.tahunan.nMinus1}
@@ -510,7 +518,7 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase">Cuti Tahunan N (Kuota Berjalan 2025)</label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase">Cuti Tahunan N (Kuota Berjalan 2026)</label>
                 <input
                   type="text"
                   value={catatanCuti.tahunan.n}

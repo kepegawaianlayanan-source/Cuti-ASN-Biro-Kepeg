@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { LeaveRequest, LeaveType, LeaveStatus } from '../types';
-import { BarChart3, Filter, Search, Calendar, Landmark, CheckCircle2, AlertCircle, RefreshCw, FileSpreadsheet, Eye, Plus } from 'lucide-react';
+import { BarChart3, Filter, Search, Calendar, Landmark, CheckCircle2, AlertCircle, RefreshCw, FileSpreadsheet, Eye, Plus, Download } from 'lucide-react';
 
 interface StatsReportsProps {
   leaveRequests: LeaveRequest[];
@@ -96,6 +96,29 @@ export default function StatsReports({
       luar_tanggungan: 'Luar Tanggungan'
     };
     return labels[type] || type;
+  };
+
+  const handleExportCSV = () => {
+    const headers = ['Nama', 'NIP', 'Unit Kerja', 'Jenis Cuti', 'Durasi (hari)', 'Tanggal Mulai', 'Status'];
+    const rows = filteredRequests.map(r => [
+      `"${r.nama}"`,
+      `"${r.nip}"`,
+      `"${r.unitKerja}"`,
+      `"${getLeaveTypeLabel(r.jenisCuti)}"`,
+      r.lamaHari,
+      r.tanggalMulai,
+      `"${r.status}"`
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Rekap_Cuti_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -322,9 +345,18 @@ export default function StatsReports({
               <FileSpreadsheet className="w-5 h-5 text-blue-600" />
               <span>Rekapitulasi Berkas Cuti Kepegawaian</span>
             </h4>
-            <span className="text-[10px] bg-blue-500/10 text-blue-600 font-bold px-3 py-1 rounded-full border border-blue-500/20">
-              {filteredRequests.length} dari {total} data ditampilkan
-            </span>
+            <div className="flex items-center space-x-3">
+              <span className="text-[10px] bg-blue-500/10 text-blue-600 font-bold px-3 py-1 rounded-full border border-blue-500/20">
+                {filteredRequests.length} dari {total} data ditampilkan
+              </span>
+              <button 
+                onClick={handleExportCSV}
+                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-full transition-all flex items-center space-x-1"
+              >
+                <Download className="w-3 h-3" />
+                <span>Export CSV</span>
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">

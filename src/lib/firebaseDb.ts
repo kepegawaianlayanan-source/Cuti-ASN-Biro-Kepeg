@@ -72,20 +72,10 @@ export async function getLeavesDirect(nip?: string, role?: string): Promise<Leav
   if (nip && role) {
     if (role === "pegawai") {
       return list.filter(l => l.nip === String(nip));
-    } else if (role === "verifikator" || role === "pimpinan") {
-      // Fetch user profile to check their unit_kerja
-      const userRef = doc(db, "users", String(nip));
-      const userSnap = await getDoc(userRef);
-      if (userSnap.exists()) {
-        const u = userSnap.data() as User;
-        const normalizeUnit = (name: string): string => {
-          if (!name) return '';
-          return name.toLowerCase().replace(/^pusat\s*-\s*/, '').trim();
-        };
-        const targetUnitNormalized = normalizeUnit(u.unit_kerja);
-        return list.filter(l => normalizeUnit(l.unitKerja) === targetUnitNormalized);
-      }
-      return [];
+    } else if (role === "verifikator") {
+      return list.filter(l => l.verifikatorNip?.trim() === String(nip).trim());
+    } else if (role === "pimpinan") {
+      return list.filter(l => l.pimpinanNip?.trim() === String(nip).trim());
     }
   }
   return list;
