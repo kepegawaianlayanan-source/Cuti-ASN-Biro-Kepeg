@@ -263,33 +263,35 @@ export default function DocumentVerification({ verifyId, onGoToLogin }: Document
             <div className="space-y-4">
               
               {/* Atasan Langsung */}
-              <div className="p-5 border border-slate-200/60 rounded-3xl bg-slate-50/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-xs">
-                <div className="space-y-1.5">
-                  <span className="bg-blue-100 text-blue-800 font-bold text-[9px] px-2 py-0.5 rounded uppercase tracking-wide">
-                    Verifikator Berkas (Atasan Langsung)
-                  </span>
-                  <p className="font-bold text-slate-800">{leave.verifikatorNama || 'CECEP SUPRIYANTO, S.H.'}</p>
-                  <p className="text-[10px] text-slate-500">NIP: {leave.verifikatorNip || '198304192009121004'} &bull; {leave.verifikatorJabatan?.split(' (')[0] || 'Analis SDMA Ahli Madya'}</p>
-                  
-                  {leave.verifikatorStatus ? (
-                    <div className="mt-2 text-[10px] text-slate-600 bg-white p-2 rounded-xl border border-slate-100">
-                      <span className="font-bold text-emerald-600">Keputusan: Telah Diverifikasi ({leave.verifikatorStatus})</span>
-                      <p className="text-slate-400 mt-0.5">Catatan: {leave.verifikatorNotes || '-'}</p>
-                      <p className="text-slate-400 text-[9px] mt-0.5">Tanggal: {leave.verifikatorDate || '-'}</p>
-                    </div>
-                  ) : (
-                    <p className="text-amber-600 font-bold italic text-[10px] mt-1">Status: Menunggu Tindakan Verifikator</p>
-                  )}
-                </div>
+              {leave.verifikatorNip ? (
+                <div className="p-5 border border-slate-200/60 rounded-3xl bg-slate-50/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-xs">
+                  <div className="space-y-1.5">
+                    <span className="bg-blue-100 text-blue-800 font-bold text-[9px] px-2 py-0.5 rounded uppercase tracking-wide">
+                      Verifikator Berkas (Atasan Langsung)
+                    </span>
+                    <p className="font-bold text-slate-800">{leave.verifikatorNama || 'CECEP SUPRIYANTO, S.H.'}</p>
+                    <p className="text-[10px] text-slate-500">NIP: {leave.verifikatorNip || '198304192009121004'} &bull; {leave.verifikatorJabatan?.split(' (')[0] || 'Analis SDMA Ahli Madya'}</p>
+                    
+                    {leave.verifikatorStatus ? (
+                      <div className="mt-2 text-[10px] text-slate-600 bg-white p-2 rounded-xl border border-slate-100">
+                        <span className="font-bold text-emerald-600">Keputusan: Telah Diverifikasi ({leave.verifikatorStatus})</span>
+                        <p className="text-slate-400 mt-0.5">Catatan: {leave.verifikatorNotes || '-'}</p>
+                        <p className="text-slate-400 text-[9px] mt-0.5">Tanggal: {leave.verifikatorDate || '-'}</p>
+                      </div>
+                    ) : (
+                      <p className="text-amber-600 font-bold italic text-[10px] mt-1">Status: Menunggu Tindakan Verifikator</p>
+                    )}
+                  </div>
 
-                <div className="shrink-0 flex flex-col items-center justify-center p-2 bg-white rounded-2xl border border-slate-100 shadow-sm w-36 h-20">
-                  {leave.verifikatorSignature ? (
-                    <img src={leave.verifikatorSignature} alt="Signature" className="max-h-12 max-w-[120px] object-contain" referrerPolicy="no-referrer" />
-                  ) : (
-                    leave.verifikatorStatus ? <span className="text-[10px] text-slate-300 italic">Signed Electronically</span> : <span className="text-[10px] text-slate-300 italic">[Belum TTD]</span>
-                  )}
+                  <div className="shrink-0 flex flex-col items-center justify-center p-2 bg-white rounded-2xl border border-slate-100 shadow-sm w-36 h-20">
+                    {leave.verifikatorSignature ? (
+                      <img src={leave.verifikatorSignature} alt="Signature" className="max-h-12 max-w-[120px] object-contain" referrerPolicy="no-referrer" />
+                    ) : (
+                      leave.verifikatorStatus ? <span className="text-[10px] text-slate-300 italic">Signed Electronically</span> : <span className="text-[10px] text-slate-300 italic">[Belum TTD]</span>
+                    )}
+                  </div>
                 </div>
-              </div>
+              ) : null}
 
               {/* Pejabat yang Berwenang (Pimpinan) */}
               <div className="p-5 border border-slate-200/60 rounded-3xl bg-slate-50/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-xs">

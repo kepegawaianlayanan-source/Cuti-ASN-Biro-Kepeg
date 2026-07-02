@@ -16,6 +16,7 @@ import UnitKerjaManagement from './components/UnitKerjaManagement';
 import UserManagement from './components/UserManagement';
 import LeaveManagement from './components/LeaveManagement';
 import DocumentVerification from './components/DocumentVerification';
+import ActiveLeavesToday from './components/ActiveLeavesToday';
 import { 
   initAuth, 
   googleSignIn, 
@@ -713,6 +714,22 @@ export default function App() {
               </button>
             )}
 
+            {/* Nav Item: Sedang Cuti Hari Ini (Public/Global View) */}
+            <button
+              onClick={() => {
+                setActiveTab('sedang_cuti');
+                setIsSidebarOpen(false);
+              }}
+              className={`w-full text-left px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center space-x-3 transition-all ${
+                activeTab === 'sedang_cuti'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              <span>Sedang Cuti Hari Ini</span>
+            </button>
+
              {/* Nav Item: Submit Leave Form */}
             {user.role !== 'admin' && (
               <button
@@ -1177,6 +1194,14 @@ export default function App() {
               </div>
 
             </div>
+          )}
+
+          {/* TAB 1.5: SEDANG CUTI HARI INI */}
+          {activeTab === 'sedang_cuti' && (
+            <ActiveLeavesToday 
+              leaveRequests={leaveRequests} 
+              darkMode={darkMode} 
+            />
           )}
 
           {/* TAB 2: PENGAJUAN CUTI BARU */}
