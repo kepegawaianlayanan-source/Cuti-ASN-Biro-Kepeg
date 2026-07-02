@@ -234,7 +234,7 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
               <div className="mb-6 text-xs text-left max-w-lg">
                 <p>
                   Yth. {leave.pimpinanJabatan?.split('(')[0]} 
-                  {isSameUnit(leave.unitKerja, leave.pimpinanJabatan || '')
+                  {leave.verifikatorNip && isSameUnit(leave.unitKerja, leave.pimpinanJabatan || '')
                     ? ` melalui ${leave.verifikatorJabatan?.split(' (')[0] || 'Analis SDMA Ahli Madya'}` 
                     : ''
                   }
@@ -418,60 +418,62 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
               </table>
 
               {/* VII. PERTIMBANGAN ATASAN LANGSUNG */}
-              <table className="w-full border-collapse border border-black mb-4 text-left">
-                <thead>
-                  <tr>
-                    <th colSpan={5} className="border border-black bg-slate-100 px-2 py-1 text-[11px] font-bold uppercase">VII. PERTIMBANGAN ATASAN LANGSUNG **</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border border-black">
-                    <td className="border border-black px-2 py-1.5 text-center font-semibold text-[10px] w-1/12">DISETUJUI</td>
-                    <td className="border border-black px-2 py-1.5 text-center font-semibold text-[10px] w-1/12">PERUBAHAN</td>
-                    <td className="border border-black px-2 py-1.5 text-center font-semibold text-[10px] w-1/12">DITANGGUHKAN</td>
-                    <td className="border border-black px-2 py-1.5 text-center font-semibold text-[10px] w-[15%]">TIDAK DISETUJUI</td>
-                    <td className="border border-black px-4 py-2 text-center align-top w-[55%] relative">
-                      <p className="text-xs mb-1 font-bold text-slate-500 uppercase tracking-wide">{leave.verifikatorJabatan?.split(' (')[0] || 'Analis SDMA Ahli Madya'}</p>
-                      
-                      {/* Approved details */}
-                      {leave.verifikatorStatus ? (
-                        <div className="my-1 p-1 bg-slate-50 border border-black/10 rounded text-left">
-                          <p className="text-[9px] font-bold">Keputusan: <span className="capitalize">{leave.verifikatorStatus}</span></p>
-                          <p className="text-[8px] truncate">Catatan: {leave.verifikatorNotes || '-'}</p>
-                        </div>
-                      ) : (
-                        <div className="my-3 text-slate-400 italic text-[9px]">[Belum Diverifikasi]</div>
-                      )}
-
-                      <div className="h-12 flex items-center justify-center my-1">
-                        {leave.verifikatorSignature ? (
-                          <img 
-                            src={leave.verifikatorSignature} 
-                            alt="Tanda Tangan Verifikator" 
-                            className="max-h-12 max-w-[140px] object-contain" 
-                            referrerPolicy="no-referrer"
-                            crossOrigin="anonymous"
-                          />
+              {leave.verifikatorNip ? (
+                <table className="w-full border-collapse border border-black mb-4 text-left">
+                  <thead>
+                    <tr>
+                      <th colSpan={5} className="border border-black bg-slate-100 px-2 py-1 text-[11px] font-bold uppercase">VII. PERTIMBANGAN ATASAN LANGSUNG **</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border border-black">
+                      <td className="border border-black px-2 py-1.5 text-center font-semibold text-[10px] w-1/12">DISETUJUI</td>
+                      <td className="border border-black px-2 py-1.5 text-center font-semibold text-[10px] w-1/12">PERUBAHAN</td>
+                      <td className="border border-black px-2 py-1.5 text-center font-semibold text-[10px] w-1/12">DITANGGUHKAN</td>
+                      <td className="border border-black px-2 py-1.5 text-center font-semibold text-[10px] w-[15%]">TIDAK DISETUJUI</td>
+                      <td className="border border-black px-4 py-2 text-center align-top w-[55%] relative">
+                        <p className="text-xs mb-1 font-bold text-slate-500 uppercase tracking-wide">{leave.verifikatorJabatan?.split(' (')[0] || 'Analis SDMA Ahli Madya'}</p>
+                        
+                        {/* Approved details */}
+                        {leave.verifikatorStatus ? (
+                          <div className="my-1 p-1 bg-slate-50 border border-black/10 rounded text-left">
+                            <p className="text-[9px] font-bold">Keputusan: <span className="capitalize">{leave.verifikatorStatus}</span></p>
+                            <p className="text-[8px] truncate">Catatan: {leave.verifikatorNotes || '-'}</p>
+                          </div>
                         ) : (
-                          leave.verifikatorStatus && <div className="text-slate-300 italic text-[8px]">[Telah Diverifikasi]</div>
+                          <div className="my-3 text-slate-400 italic text-[9px]">[Belum Diverifikasi]</div>
                         )}
-                      </div>
- 
-                      <p className="font-bold underline mt-0.5">{leave.verifikatorNama || 'CECEP SUPRIYANTO, S.H.'}</p>
-                      <p className="font-mono text-[9px]">NIP. {leave.verifikatorNip || '198304192009121004'}</p>
-                    </td>
-                  </tr>
-                  <tr className="border border-black">
-                    <td className="border border-black text-center font-bold px-1 py-2 text-sm">{isVerifikatorStatus('disetujui')}</td>
-                    <td className="border border-black text-center font-bold px-1 py-2 text-sm">{isVerifikatorStatus('perubahan')}</td>
-                    <td className="border border-black text-center font-bold px-1 py-2 text-sm">{isVerifikatorStatus('ditangguhkan')}</td>
-                    <td className="border border-black text-center font-bold px-1 py-2 text-sm">{isVerifikatorStatus('ditolak')}</td>
-                    <td className="border border-black px-2 py-1 text-[9px] italic text-slate-400">
-                      * Status terakhir: {leave.verifikatorDate ? `Verifikasi pada ${leave.verifikatorDate}` : 'Menunggu tindakan'}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+
+                        <div className="h-12 flex items-center justify-center my-1">
+                          {leave.verifikatorSignature ? (
+                            <img 
+                              src={leave.verifikatorSignature} 
+                              alt="Tanda Tangan Verifikator" 
+                              className="max-h-12 max-w-[140px] object-contain" 
+                              referrerPolicy="no-referrer"
+                              crossOrigin="anonymous"
+                            />
+                          ) : (
+                            leave.verifikatorStatus && <div className="text-slate-300 italic text-[8px]">[Telah Diverifikasi]</div>
+                          )}
+                        </div>
+   
+                        <p className="font-bold underline mt-0.5">{leave.verifikatorNama || 'CECEP SUPRIYANTO, S.H.'}</p>
+                        <p className="font-mono text-[9px]">NIP. {leave.verifikatorNip || '198304192009121004'}</p>
+                      </td>
+                    </tr>
+                    <tr className="border border-black">
+                      <td className="border border-black text-center font-bold px-1 py-2 text-sm">{isVerifikatorStatus('disetujui')}</td>
+                      <td className="border border-black text-center font-bold px-1 py-2 text-sm">{isVerifikatorStatus('perubahan')}</td>
+                      <td className="border border-black text-center font-bold px-1 py-2 text-sm">{isVerifikatorStatus('ditangguhkan')}</td>
+                      <td className="border border-black text-center font-bold px-1 py-2 text-sm">{isVerifikatorStatus('ditolak')}</td>
+                      <td className="border border-black px-2 py-1 text-[9px] italic text-slate-400">
+                        * Status terakhir: {leave.verifikatorDate ? `Verifikasi pada ${leave.verifikatorDate}` : 'Menunggu tindakan'}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              ) : null}
 
               {/* VIII. PERTIMBANGAN PEJABAT YANG BERWENANG */}
               <table className="w-full border-collapse border border-black mb-4 text-left">
@@ -576,7 +578,7 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
           <div className="mb-6 text-[11px] text-left max-w-lg">
             <p>
               Yth. {leave.pimpinanJabatan?.split('(')[0]} 
-              {isSameUnit(leave.unitKerja, leave.pimpinanJabatan || '')
+              {leave.verifikatorNip && isSameUnit(leave.unitKerja, leave.pimpinanJabatan || '')
                 ? ` melalui ${leave.verifikatorJabatan?.split(' (')[0] || 'Analis SDMA Ahli Madya'}` 
                 : ''
               }
@@ -759,58 +761,60 @@ export default function LeaveReport({ leave, onClose }: LeaveReportProps) {
           </table>
 
           {/* VII. PERTIMBANGAN ATASAN LANGSUNG */}
-          <table className="w-full border-collapse border border-black mb-3 text-left">
-            <thead>
-              <tr>
-                <th colSpan={5} className="border border-black bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase">VII. PERTIMBANGAN ATASAN LANGSUNG **</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border border-black">
-                <td className="border border-black px-1 py-1 text-center font-semibold text-[9px] w-1/12">DISETUJUI</td>
-                <td className="border border-black px-1 py-1 text-center font-semibold text-[9px] w-1/12">PERUBAHAN</td>
-                <td className="border border-black px-1 py-1 text-center font-semibold text-[9px] w-1/12">DITANGGUHKAN</td>
-                <td className="border border-black px-1 py-1 text-center font-semibold text-[9px] w-[15%]">TIDAK DISETUJUI</td>
-                <td className="border border-black px-4 py-1.5 text-center align-top w-[55%] relative">
-                  <p className="text-[10px] mb-0.5 font-bold uppercase">{leave.verifikatorJabatan?.split(' (')[0] || 'Analis SDMA Ahli Madya'}</p>
-                  
-                  {leave.verifikatorStatus ? (
-                    <div className="my-1 p-1 bg-slate-50 border border-black/10 rounded text-left">
-                      <p className="text-[9px] font-bold">Keputusan: <span className="capitalize">{leave.verifikatorStatus}</span></p>
-                      <p className="text-[8px] truncate">Catatan: {leave.verifikatorNotes || '-'}</p>
-                    </div>
-                  ) : (
-                    <div className="my-3 text-slate-400 italic text-[9px]">[Belum Diverifikasi]</div>
-                  )}
-
-                  <div className="h-12 flex items-center justify-center my-1">
-                    {leave.verifikatorSignature ? (
-                      <img 
-                        src={leave.verifikatorSignature} 
-                        alt="Tanda Tangan Verifikator" 
-                        className="max-h-12 max-w-[140px] object-contain" 
-                        referrerPolicy="no-referrer"
-                      />
+          {leave.verifikatorNip ? (
+            <table className="w-full border-collapse border border-black mb-3 text-left">
+              <thead>
+                <tr>
+                  <th colSpan={5} className="border border-black bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase">VII. PERTIMBANGAN ATASAN LANGSUNG **</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border border-black">
+                  <td className="border border-black px-1 py-1 text-center font-semibold text-[9px] w-1/12">DISETUJUI</td>
+                  <td className="border border-black px-1 py-1 text-center font-semibold text-[9px] w-1/12">PERUBAHAN</td>
+                  <td className="border border-black px-1 py-1 text-center font-semibold text-[9px] w-1/12">DITANGGUHKAN</td>
+                  <td className="border border-black px-1 py-1 text-center font-semibold text-[9px] w-[15%]">TIDAK DISETUJUI</td>
+                  <td className="border border-black px-4 py-1.5 text-center align-top w-[55%] relative">
+                    <p className="text-[10px] mb-0.5 font-bold uppercase">{leave.verifikatorJabatan?.split(' (')[0] || 'Analis SDMA Ahli Madya'}</p>
+                    
+                    {leave.verifikatorStatus ? (
+                      <div className="my-1 p-1 bg-slate-50 border border-black/10 rounded text-left">
+                        <p className="text-[9px] font-bold">Keputusan: <span className="capitalize">{leave.verifikatorStatus}</span></p>
+                        <p className="text-[8px] truncate">Catatan: {leave.verifikatorNotes || '-'}</p>
+                      </div>
                     ) : (
-                      leave.verifikatorStatus && <div className="text-slate-300 italic text-[8px]">[Telah Diverifikasi]</div>
+                      <div className="my-3 text-slate-400 italic text-[9px]">[Belum Diverifikasi]</div>
                     )}
-                  </div>
 
-                  <p className="font-bold underline mt-0.5">{leave.verifikatorNama || 'CECEP SUPRIYANTO, S.H.'}</p>
-                  <p className="font-mono text-[9px]">NIP. {leave.verifikatorNip || '198304192009121004'}</p>
-                </td>
-              </tr>
-              <tr className="border border-black">
-                <td className="border border-black text-center font-bold px-1 py-1 text-xs">{isVerifikatorStatus('disetujui')}</td>
-                <td className="border border-black text-center font-bold px-1 py-1 text-xs">{isVerifikatorStatus('perubahan')}</td>
-                <td className="border border-black text-center font-bold px-1 py-1 text-xs">{isVerifikatorStatus('ditangguhkan')}</td>
-                <td className="border border-black text-center font-bold px-1 py-1 text-xs">{isVerifikatorStatus('ditolak')}</td>
-                <td className="border border-black px-2 py-0.5 text-[8px] italic text-slate-400">
-                  {leave.verifikatorDate ? `Verifikasi: ${leave.verifikatorDate}` : 'Menunggu tindakan'}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                    <div className="h-12 flex items-center justify-center my-1">
+                      {leave.verifikatorSignature ? (
+                        <img 
+                          src={leave.verifikatorSignature} 
+                          alt="Tanda Tangan Verifikator" 
+                          className="max-h-12 max-w-[140px] object-contain" 
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        leave.verifikatorStatus && <div className="text-slate-300 italic text-[8px]">[Telah Diverifikasi]</div>
+                      )}
+                    </div>
+
+                    <p className="font-bold underline mt-0.5">{leave.verifikatorNama || 'CECEP SUPRIYANTO, S.H.'}</p>
+                    <p className="font-mono text-[9px]">NIP. {leave.verifikatorNip || '198304192009121004'}</p>
+                  </td>
+                </tr>
+                <tr className="border border-black">
+                  <td className="border border-black text-center font-bold px-1 py-1 text-xs">{isVerifikatorStatus('disetujui')}</td>
+                  <td className="border border-black text-center font-bold px-1 py-1 text-xs">{isVerifikatorStatus('perubahan')}</td>
+                  <td className="border border-black text-center font-bold px-1 py-1 text-xs">{isVerifikatorStatus('ditangguhkan')}</td>
+                  <td className="border border-black text-center font-bold px-1 py-1 text-xs">{isVerifikatorStatus('ditolak')}</td>
+                  <td className="border border-black px-2 py-0.5 text-[8px] italic text-slate-400">
+                    {leave.verifikatorDate ? `Verifikasi: ${leave.verifikatorDate}` : 'Menunggu tindakan'}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          ) : null}
 
           {/* VIII. PERTIMBANGAN PEJABAT YANG BERWENANG */}
           <table className="w-full border-collapse border border-black mb-3 text-left">

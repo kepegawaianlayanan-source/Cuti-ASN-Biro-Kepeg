@@ -73,9 +73,9 @@ export async function getLeavesDirect(nip?: string, role?: string): Promise<Leav
     if (role === "pegawai") {
       return list.filter(l => l.nip === String(nip));
     } else if (role === "verifikator") {
-      return list.filter(l => l.verifikatorNip?.trim() === String(nip).trim());
+      return list.filter(l => l.verifikatorNip?.trim() === String(nip).trim() || l.nip === String(nip));
     } else if (role === "pimpinan") {
-      return list.filter(l => l.pimpinanNip?.trim() === String(nip).trim());
+      return list.filter(l => l.pimpinanNip?.trim() === String(nip).trim() || l.nip === String(nip));
     }
   }
   return list;

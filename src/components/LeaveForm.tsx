@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, LeaveType, CatatanCuti, LeaveRequest } from '../types';
-import { FileText, Send, Calendar, MapPin, Phone, HelpCircle, Loader2, RefreshCw, Building2, Globe, AlertTriangle } from 'lucide-react';
+import { FileText, Send, Calendar, MapPin, Phone, HelpCircle, Loader2, RefreshCw, Building2, Globe, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { getUsersDirect, saveLeaveDirect, triggerNotificationDirect, getLeavesDirect } from '../lib/firebaseDb';
 
 interface LeaveFormProps {
@@ -255,7 +255,9 @@ export default function LeaveForm({ user, onSuccess, editRequest, onCancelEdit }
       return;
     }
 
-    if (!alasan || !tanggalMulai || !tanggalSelesai || !alamatCuti || !telepon || !verifikatorNip || !pimpinanNip) {
+    const isVerifikator = user.role === 'verifikator';
+
+    if (!alasan || !tanggalMulai || !tanggalSelesai || !alamatCuti || !telepon || (!isVerifikator && !verifikatorNip) || !pimpinanNip) {
       setError("Silakan isi semua kolom bertanda bintang (*).");
       return;
     }
@@ -268,7 +270,7 @@ export default function LeaveForm({ user, onSuccess, editRequest, onCancelEdit }
     setIsSubmitting(true);
 
     try {
-      const activeVerif = allUsers.find(u => u.nip === verifikatorNip);
+      const activeVerif = isVerifikator ? null : allUsers.find(u => u.nip === verifikatorNip);
       const activePimp = allUsers.find(u => u.nip === pimpinanNip);
 
       const savedLeave: LeaveRequest = {
@@ -286,12 +288,12 @@ export default function LeaveForm({ user, onSuccess, editRequest, onCancelEdit }
         alamatCuti,
         telepon,
         catatanCuti,
-        status: 'menunggu_verifikasi',
+        status: isVerifikator ? 'menunggu_pimpinan' : 'menunggu_verifikasi',
         pemohonSignature: user.signature || '',
         
-        verifikatorNip,
-        verifikatorNama: activeVerif?.nama || '',
-        verifikatorJabatan: activeVerif?.jabatan || '',
+        verifikatorNip: isVerifikator ? '' : verifikatorNip,
+        verifikatorNama: isVerifikator ? '' : (activeVerif?.nama || ''),
+        verifikatorJabatan: isVerifikator ? '' : (activeVerif?.jabatan || ''),
         
         pimpinanNip,
         pimpinanNama: activePimp?.nama || '',
@@ -302,12 +304,20 @@ export default function LeaveForm({ user, onSuccess, editRequest, onCancelEdit }
 
       await saveLeaveDirect(savedLeave);
 
-      // Trigger notification for verifikator
-      await triggerNotificationDirect(
-        verifikatorNip,
-        editRequest ? "Perbaikan Pengajuan Cuti" : "Pengajuan Cuti Baru",
-        `${user.nama} mengajukan ${editRequest ? 'perbaikan ' : ''}cuti ${jenisCuti} selama ${lamaHari} hari dan membutuhkan verifikasi Anda.`
-      );
+      // Trigger notification for the appropriate recipient
+      if (isVerifikator) {
+        await triggerNotificationDirect(
+          pimpinanNip,
+          editRequest ? "Perbaikan Pengajuan Cuti (Verifikator)" : "Pengajuan Cuti Baru (Verifikator)",
+          `${user.nama} mengajukan ${editRequest ? 'perbaikan ' : ''}cuti ${jenisCuti} selama ${lamaHari} hari dan membutuhkan persetujuan Anda.`
+        );
+      } else {
+        await triggerNotificationDirect(
+          verifikatorNip,
+          editRequest ? "Perbaikan Pengajuan Cuti" : "Pengajuan Cuti Baru",
+          `${user.nama} mengajukan ${editRequest ? 'perbaikan ' : ''}cuti ${jenisCuti} selama ${lamaHari} hari dan membutuhkan verifikasi Anda.`
+        );
+      }
 
       // Success
       onSuccess(savedLeave);
@@ -569,27 +579,51 @@ export default function LeaveForm({ user, onSuccess, editRequest, onCancelEdit }
                 <label className="block text-[10px] font-bold text-slate-500 uppercase">Cuti Tahunan N-2 (Sisa)</label>
                 <input
                   type="text"
-                  readOnly
+                  readOnly={jenisCuti !== 'tahunan'}
                   value={catatanCuti.tahunan.nMinus2}
-                  className="w-full mt-1 px-3 py-1.5 bg-slate-100/60 border border-slate-200 rounded-xl text-xs focus:outline-none text-slate-500 cursor-not-allowed font-medium"
+                  onChange={(e) => setCatatanCuti(prev => ({
+                    ...prev,
+                    tahunan: { ...prev.tahunan, nMinus2: e.target.value }
+                  }))}
+                  className={`w-full mt-1 px-3 py-1.5 rounded-xl text-xs focus:outline-none font-semibold transition-all ${
+                    jenisCuti === 'tahunan'
+                      ? 'bg-white border border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-slate-800'
+                      : 'bg-slate-100/60 border border-slate-200 text-slate-500 cursor-not-allowed font-medium'
+                  }`}
                 />
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase">Cuti Tahunan N-1 (Sisa 2025)</label>
                 <input
                   type="text"
-                  readOnly
+                  readOnly={jenisCuti !== 'tahunan'}
                   value={catatanCuti.tahunan.nMinus1}
-                  className="w-full mt-1 px-3 py-1.5 bg-slate-100/60 border border-slate-200 rounded-xl text-xs focus:outline-none text-slate-500 cursor-not-allowed font-medium"
+                  onChange={(e) => setCatatanCuti(prev => ({
+                    ...prev,
+                    tahunan: { ...prev.tahunan, nMinus1: e.target.value }
+                  }))}
+                  className={`w-full mt-1 px-3 py-1.5 rounded-xl text-xs focus:outline-none font-semibold transition-all ${
+                    jenisCuti === 'tahunan'
+                      ? 'bg-white border border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-slate-800'
+                      : 'bg-slate-100/60 border border-slate-200 text-slate-500 cursor-not-allowed font-medium'
+                  }`}
                 />
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase">Cuti Tahunan N (Kuota Berjalan 2026)</label>
                 <input
                   type="text"
-                  readOnly
+                  readOnly={jenisCuti !== 'tahunan'}
                   value={catatanCuti.tahunan.n}
-                  className="w-full mt-1 px-3 py-1.5 bg-slate-100/60 border border-slate-200 rounded-xl text-xs focus:outline-none text-slate-500 cursor-not-allowed font-medium"
+                  onChange={(e) => setCatatanCuti(prev => ({
+                    ...prev,
+                    tahunan: { ...prev.tahunan, n: e.target.value }
+                  }))}
+                  className={`w-full mt-1 px-3 py-1.5 rounded-xl text-xs focus:outline-none font-semibold transition-all ${
+                    jenisCuti === 'tahunan'
+                      ? 'bg-white border border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-slate-800'
+                      : 'bg-slate-100/60 border border-slate-200 text-slate-500 cursor-not-allowed font-medium'
+                  }`}
                 />
               </div>
             </div>
@@ -599,45 +633,85 @@ export default function LeaveForm({ user, onSuccess, editRequest, onCancelEdit }
                 <label className="block text-[9px] font-bold text-slate-500 uppercase">Cuti Besar</label>
                 <input
                   type="text"
-                  readOnly
+                  readOnly={jenisCuti !== 'besar'}
                   value={catatanCuti.besar}
-                  className="w-full mt-1 px-3 py-1.5 bg-slate-100/60 border border-slate-200 rounded-xl text-xs focus:outline-none text-slate-500 cursor-not-allowed font-medium"
+                  onChange={(e) => setCatatanCuti(prev => ({
+                    ...prev,
+                    besar: e.target.value
+                  }))}
+                  className={`w-full mt-1 px-3 py-1.5 rounded-xl text-xs focus:outline-none font-semibold transition-all ${
+                    jenisCuti === 'besar'
+                      ? 'bg-white border border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-slate-800'
+                      : 'bg-slate-100/60 border border-slate-200 text-slate-500 cursor-not-allowed font-medium'
+                  }`}
                 />
               </div>
               <div>
                 <label className="block text-[9px] font-bold text-slate-500 uppercase">Cuti Sakit</label>
                 <input
                   type="text"
-                  readOnly
+                  readOnly={jenisCuti !== 'sakit'}
                   value={catatanCuti.sakit}
-                  className="w-full mt-1 px-3 py-1.5 bg-slate-100/60 border border-slate-200 rounded-xl text-xs focus:outline-none text-slate-500 cursor-not-allowed font-medium"
+                  onChange={(e) => setCatatanCuti(prev => ({
+                    ...prev,
+                    sakit: e.target.value
+                  }))}
+                  className={`w-full mt-1 px-3 py-1.5 rounded-xl text-xs focus:outline-none font-semibold transition-all ${
+                    jenisCuti === 'sakit'
+                      ? 'bg-white border border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-slate-800'
+                      : 'bg-slate-100/60 border border-slate-200 text-slate-500 cursor-not-allowed font-medium'
+                  }`}
                 />
               </div>
               <div>
                 <label className="block text-[9px] font-bold text-slate-500 uppercase">Cuti Melahirkan</label>
                 <input
                   type="text"
-                  readOnly
+                  readOnly={jenisCuti !== 'melahirkan'}
                   value={catatanCuti.melahirkan}
-                  className="w-full mt-1 px-3 py-1.5 bg-slate-100/60 border border-slate-200 rounded-xl text-xs focus:outline-none text-slate-500 cursor-not-allowed font-medium"
+                  onChange={(e) => setCatatanCuti(prev => ({
+                    ...prev,
+                    melahirkan: e.target.value
+                  }))}
+                  className={`w-full mt-1 px-3 py-1.5 rounded-xl text-xs focus:outline-none font-semibold transition-all ${
+                    jenisCuti === 'melahirkan'
+                      ? 'bg-white border border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-slate-800'
+                      : 'bg-slate-100/60 border border-slate-200 text-slate-500 cursor-not-allowed font-medium'
+                  }`}
                 />
               </div>
               <div>
                 <label className="block text-[9px] font-bold text-slate-500 uppercase">Cuti Alasan Penting</label>
                 <input
                   type="text"
-                  readOnly
+                  readOnly={jenisCuti !== 'alasan_penting'}
                   value={catatanCuti.alasanPenting}
-                  className="w-full mt-1 px-3 py-1.5 bg-slate-100/60 border border-slate-200 rounded-xl text-xs focus:outline-none text-slate-500 cursor-not-allowed font-medium"
+                  onChange={(e) => setCatatanCuti(prev => ({
+                    ...prev,
+                    alasanPenting: e.target.value
+                  }))}
+                  className={`w-full mt-1 px-3 py-1.5 rounded-xl text-xs focus:outline-none font-semibold transition-all ${
+                    jenisCuti === 'alasan_penting'
+                      ? 'bg-white border border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-slate-800'
+                      : 'bg-slate-100/60 border border-slate-200 text-slate-500 cursor-not-allowed font-medium'
+                  }`}
                 />
               </div>
               <div>
                 <label className="block text-[9px] font-bold text-slate-500 uppercase">Luar Tanggungan</label>
                 <input
                   type="text"
-                  readOnly
+                  readOnly={jenisCuti !== 'luar_tanggungan'}
                   value={catatanCuti.luarTanggungan}
-                  className="w-full mt-1 px-3 py-1.5 bg-slate-100/60 border border-slate-200 rounded-xl text-xs focus:outline-none text-slate-500 cursor-not-allowed font-medium"
+                  onChange={(e) => setCatatanCuti(prev => ({
+                    ...prev,
+                    luarTanggungan: e.target.value
+                  }))}
+                  className={`w-full mt-1 px-3 py-1.5 rounded-xl text-xs focus:outline-none font-semibold transition-all ${
+                    jenisCuti === 'luar_tanggungan'
+                      ? 'bg-white border border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-slate-800'
+                      : 'bg-slate-100/60 border border-slate-200 text-slate-500 cursor-not-allowed font-medium'
+                  }`}
                 />
               </div>
             </div>
@@ -725,38 +799,50 @@ export default function LeaveForm({ user, onSuccess, editRequest, onCancelEdit }
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-blue-500/[0.02] border border-blue-500/10 p-5 rounded-2xl">
             {/* Direct Superior Select */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-2">
-                1. Atasan Langsung (Verifikator) *
-              </label>
-              {isLoadingUsers ? (
-                <div className="flex items-center space-x-2 py-3 text-xs text-slate-400">
-                  <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                  <span>Memuat daftar verifikator...</span>
+            {user.role === 'verifikator' ? (
+              <div className="bg-emerald-50 border border-emerald-150 p-5 rounded-2xl flex items-start space-x-3 text-emerald-800">
+                <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="text-xs font-semibold">
+                  <p className="font-bold text-emerald-900 text-sm mb-1">Verifikator / Atasan Langsung Dilewati</p>
+                  <p className="leading-relaxed text-emerald-700">
+                    Sebagai Verifikator, pengajuan cuti Anda akan langsung diteruskan ke Pejabat Berwenang (Pimpinan) untuk persetujuan akhir tanpa melalui tahap verifikasi atasan langsung lagi.
+                  </p>
                 </div>
-              ) : verifiers.length === 0 ? (
-                <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] rounded-xl font-medium leading-relaxed">
-                  Tidak ada Verifikator di unit kerja <span className="font-bold">{user.unit_kerja}</span>. Silakan gunakan tab <span className="font-bold">"Lintas Unit Kerja"</span> di atas.
-                </div>
-              ) : (
-                <select
-                  required
-                  value={verifikatorNip}
-                  onChange={(e) => setVerifikatorNip(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800 font-medium"
-                >
-                  <option value="">-- Pilih Atasan Langsung (Verifikator) --</option>
-                  {verifiers.map((v) => (
-                    <option key={v.nip} value={v.nip}>
-                      {v.nama}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">
-                Atasan yang bertanggung jawab untuk memverifikasi kesesuaian administrasi, sisa cuti, dan kelayakan pengajuan sebelum diteruskan.
-              </p>
-            </div>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-2">
+                  1. Atasan Langsung (Verifikator) *
+                </label>
+                {isLoadingUsers ? (
+                  <div className="flex items-center space-x-2 py-3 text-xs text-slate-400">
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                    <span>Memuat daftar verifikator...</span>
+                  </div>
+                ) : verifiers.length === 0 ? (
+                  <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] rounded-xl font-medium leading-relaxed">
+                    Tidak ada Verifikator di unit kerja <span className="font-bold">{user.unit_kerja}</span>. Silakan gunakan tab <span className="font-bold">"Lintas Unit Kerja"</span> di atas.
+                  </div>
+                ) : (
+                  <select
+                    required
+                    value={verifikatorNip}
+                    onChange={(e) => setVerifikatorNip(e.target.value)}
+                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800 font-medium"
+                  >
+                    <option value="">-- Pilih Atasan Langsung (Verifikator) --</option>
+                    {verifiers.map((v) => (
+                      <option key={v.nip} value={v.nip}>
+                        {v.nama}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">
+                  Atasan yang bertanggung jawab untuk memverifikasi kesesuaian administrasi, sisa cuti, dan kelayakan pengajuan sebelum diteruskan.
+                </p>
+              </div>
+            )}
 
             {/* Authorizing Leader Select */}
             <div>
