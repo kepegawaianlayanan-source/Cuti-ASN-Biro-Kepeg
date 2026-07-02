@@ -58,8 +58,7 @@ export default function App() {
   const [editRequest, setEditRequest] = useState<LeaveRequest | null>(null);
 
   const [darkMode, setDarkMode] = useState<boolean>(() => {
-    return localStorage.getItem('darkMode') === 'true' || 
-           (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    return localStorage.getItem('darkMode') === 'true';
   });
 
   useEffect(() => {

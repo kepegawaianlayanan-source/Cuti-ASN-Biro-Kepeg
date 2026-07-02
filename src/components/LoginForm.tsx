@@ -18,7 +18,6 @@ export default function LoginForm({ onLoginSuccess, onVerifyCode }: LoginFormPro
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<UserRole>('pegawai');
 
   const [showVerifySection, setShowVerifySection] = useState(false);
   const [verifyInput, setVerifyInput] = useState('');
@@ -34,17 +33,6 @@ export default function LoginForm({ onLoginSuccess, onVerifyCode }: LoginFormPro
       onVerifyCode(verifyInput.trim());
     }
   };
-
-  // Shortlisted users for quick-demo switching
-  const demoUsers: { role: UserRole; nip: string; nama: string; jabatan: string; dept: string }[] = [
-    { role: 'pegawai', nip: '199406052025061004', nama: 'Juni Trianto, A.Md.', jabatan: 'Pranata SDM Aparatur Terampil', dept: 'Biro Kepegawaian, Organisasi, dan Tata Laksana' },
-    { role: 'pegawai', nip: '6666', nama: 'Budi Rescuer', jabatan: 'Rescuer Mahir', dept: 'Kantor SAR Jakarta' },
-    { role: 'verifikator', nip: '198304192009121004', nama: 'Cecep Supriyanto S.H.', jabatan: 'Analis SDM Aparatur Ahli Madya', dept: 'Biro Kepegawaian, Organisasi, dan Tata Laksana' },
-    { role: 'verifikator', nip: '5555', nama: 'Rian Hermawan, S.Kom.', jabatan: 'Kasubag Umum & Kepegawaian', dept: 'Kantor SAR Jakarta' },
-    { role: 'pimpinan', nip: '196610071994031001', nama: 'Drs. MOCHAMAD HERNANTO M.M.', jabatan: 'Kepala Biro Kepegawaian, Organisasi, dan Tata Laksana', dept: 'Biro Kepegawaian, Organisasi, dan Tata Laksana' },
-    { role: 'pimpinan', nip: '1111', nama: 'Marsekal Madya Kusworo, S.E.', jabatan: 'Kepala Basarnas', dept: 'Pusat - Kepala Basarnas' },
-    { role: 'admin', nip: '7777', nama: 'Pranata Komputer Admin', jabatan: 'Admin Sistem Kepegawaian Utama', dept: 'Biro Kepegawaian, Organisasi, dan Tata Laksana' },
-  ];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,31 +54,6 @@ export default function LoginForm({ onLoginSuccess, onVerifyCode }: LoginFormPro
       }
 
       // Return authenticated user metadata safely
-      const { password: _, ...safeUser } = user;
-      onLoginSuccess(safeUser as User);
-    } catch (err: any) {
-      setError(err.message || 'Koneksi ke database gagal.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDemoLogin = async (demoNip: string) => {
-    setNip(demoNip);
-    setPassword('basarnas123'); // seed password is identical for all accounts
-    
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const user = await getUserDirect(demoNip);
-      if (!user) {
-        throw new Error('Pegawai demo tidak ditemukan.');
-      }
-      if (user.password !== 'basarnas123') {
-        throw new Error('Sandi pegawai demo telah diubah.');
-      }
-
       const { password: _, ...safeUser } = user;
       onLoginSuccess(safeUser as User);
     } catch (err: any) {
@@ -267,54 +230,7 @@ export default function LoginForm({ onLoginSuccess, onVerifyCode }: LoginFormPro
             )}
           </div>
 
-          {/* DEMO ACCOUNTS QUICK SWITCHER SECTION */}
-          <div className="mt-8 border-t border-slate-100 pt-6">
-            <div className="flex items-center space-x-2 mb-4 text-slate-700">
-              <Info className="w-4.5 h-4.5 text-blue-500 shrink-0" />
-              <span className="text-xs font-bold uppercase tracking-wider">Demo Quick Login (Klik untuk Masuk)</span>
-            </div>
-
-            {/* Tabs for Roles in Demo */}
-            <div className="flex border-b border-slate-100 mb-3 bg-slate-50 p-1 rounded-xl">
-              {(['pegawai', 'verifikator', 'pimpinan', 'admin'] as UserRole[]).map((role) => (
-                <button
-                  key={role}
-                  type="button"
-                  onClick={() => setActiveTab(role)}
-                  className={`flex-1 py-1.5 text-xs font-semibold capitalize rounded-lg transition-all ${
-                    activeTab === role
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-700'
-                  }`}
-                >
-                  {role}
-                </button>
-              ))}
-            </div>
-
-            {/* List of demo users filtered by active tab */}
-            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-              {demoUsers
-                .filter((du) => du.role === activeTab)
-                .map((du) => (
-                  <button
-                    key={du.nip}
-                    type="button"
-                    onClick={() => handleDemoLogin(du.nip)}
-                    className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-blue-200 bg-slate-50/50 hover:bg-blue-50/20 transition-all flex justify-between items-center group"
-                  >
-                    <div className="min-w-0 pr-2">
-                      <h4 className="text-xs font-bold text-slate-800 group-hover:text-slate-950 truncate">{du.nama}</h4>
-                      <p className="text-[10px] text-slate-500 mt-0.5 truncate">{du.jabatan}</p>
-                      <p className="text-[9px] text-slate-400 font-mono mt-0.5">NIP: {du.nip} &bull; {du.dept.split(' - ')[1] || du.dept}</p>
-                    </div>
-                    <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-1 rounded-lg shrink-0 group-hover:bg-blue-100/50 transition-all">
-                      Masuk &rarr;
-                    </span>
-                  </button>
-                ))}
-            </div>
-          </div>
+          {/* Verification section below form */}
 
         </div>
       </div>
