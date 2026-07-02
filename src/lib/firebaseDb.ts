@@ -129,6 +129,16 @@ export async function markAllNotificationsAsReadDirect(nip: string): Promise<voi
   }
 }
 
+export async function clearAllNotificationsDirect(nip: string): Promise<void> {
+  const snap = await getDocs(collection(db, "notifications"));
+  for (const d of snap.docs) {
+    const notif = d.data() as Notification;
+    if (notif.nip === String(nip)) {
+      await deleteDoc(doc(db, "notifications", d.id));
+    }
+  }
+}
+
 // ==========================================
 // 5. System Reset Function (Safely Clears Transactions only)
 // ==========================================

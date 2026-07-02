@@ -7,7 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { LeaveRequest } from '../types';
 import { ShieldCheck, ShieldAlert, Check, Landmark, Calendar, User, Phone, MapPin, FileText, ArrowRight } from 'lucide-react';
 import { db } from '../lib/firebaseDb';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 
 interface DocumentVerificationProps {
   verifyId: string;
@@ -22,12 +22,29 @@ export default function DocumentVerification({ verifyId, onGoToLogin }: Document
   useEffect(() => {
     async function verifyDoc() {
       try {
+        // Coba ambil dokumen secara langsung dengan ID utuh
         const docRef = doc(db, 'leaves', verifyId);
         const snap = await getDoc(docRef);
-        if (!snap.exists()) {
-          throw new Error('Dokumen cuti tidak ditemukan atau kode verifikasi salah.');
+        if (snap.exists()) {
+          setLeave(snap.data() as LeaveRequest);
+        } else {
+          // Jika tidak ditemukan langsung (misalnya user hanya memasukkan 13 digit angka saja),
+          // cari di seluruh data cuti yang memiliki kecocokan ID
+          const querySnap = await getDocs(collection(db, 'leaves'));
+          const foundDoc = querySnap.docs.find(d => {
+            const dataId = d.id;
+            // Cocokkan jika ID sama persis, atau jika ID dipisah dengan '_' mengandung angka verifyId
+            return dataId === verifyId || 
+                   dataId.includes(verifyId) || 
+                   (dataId.split('_')[1] && dataId.split('_')[1] === verifyId);
+          });
+
+          if (foundDoc) {
+            setLeave(foundDoc.data() as LeaveRequest);
+          } else {
+            throw new Error('Dokumen cuti tidak ditemukan atau kode verifikasi salah.');
+          }
         }
-        setLeave(snap.data() as LeaveRequest);
       } catch (err: any) {
         setError(err.message || 'Gagal memverifikasi dokumen.');
       } finally {
@@ -324,7 +341,7 @@ export default function DocumentVerification({ verifyId, onGoToLogin }: Document
 
       {/* Footer copyright */}
       <div className="max-w-3xl w-full mx-auto text-center mt-8 pb-12 text-[10px] text-slate-400 font-medium">
-        &copy; {new Date().getFullYear()} Biro Umum & Kepegawaian BASARNAS. All rights reserved.
+        &copy; {new Date().getFullYear()} Biro Kepegawaian, Organisasi, dan Tata Laksana. All rights reserved.
       </div>
 
     </div>

@@ -716,7 +716,7 @@ export default function LeaveManagement({ showToast, onLeavesChange, currentUser
                       <option value="" disabled>-- Pilih Verifikator --</option>
                       {verifiers.map(v => (
                         <option key={v.nip} value={v.nip}>
-                          {v.nama} - {v.jabatan}
+                          {v.nama}
                         </option>
                       ))}
                     </select>
@@ -734,7 +734,7 @@ export default function LeaveManagement({ showToast, onLeavesChange, currentUser
                       <option value="" disabled>-- Pilih Pimpinan --</option>
                       {leaders.map(l => (
                         <option key={l.nip} value={l.nip}>
-                          {l.nama} - {l.jabatan}
+                          {l.nama}
                         </option>
                       ))}
                     </select>

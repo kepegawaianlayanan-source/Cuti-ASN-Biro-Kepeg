@@ -11,6 +11,8 @@ import { getUsersDirect, saveLeaveDirect, triggerNotificationDirect, getLeavesDi
 interface LeaveFormProps {
   user: User;
   onSuccess: (newLeave?: any) => void;
+  editRequest?: LeaveRequest;
+  onCancelEdit?: () => void;
 }
 
 // Helper to compare unit_kerja flexibly and robustly (e.g., treating "Pusat - Biro Kepegawaian" and "Pusat - Biro Kepegawaian, Organisasi, dan Tata Laksana" as identical)
@@ -29,7 +31,7 @@ const isSameUnit = (unitA: string, unitB: string): boolean => {
   return normalize(unitA) === normalize(unitB);
 };
 
-export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
+export default function LeaveForm({ user, onSuccess, editRequest, onCancelEdit }: LeaveFormProps) {
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -62,6 +64,24 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
     luarTanggungan: '-'
   });
 
+  // Load existing leave data if editRequest is provided
+  useEffect(() => {
+    if (editRequest) {
+      setJenisCuti(editRequest.jenisCuti);
+      setAlasan(editRequest.alasan);
+      setLamaHari(editRequest.lamaHari);
+      setTanggalMulai(editRequest.tanggalMulai);
+      setTanggalSelesai(editRequest.tanggalSelesai);
+      setAlamatCuti(editRequest.alamatCuti);
+      setTelepon(editRequest.telepon);
+      setVerifikatorNip(editRequest.verifikatorNip || '');
+      setPimpinanNip(editRequest.pimpinanNip || '');
+      if (editRequest.catatanCuti) {
+        setCatatanCuti(editRequest.catatanCuti);
+      }
+    }
+  }, [editRequest]);
+
   // Fetch verifiers and leaders to populate select menus
   useEffect(() => {
     async function fetchUsers() {
@@ -70,23 +90,28 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
         const data = await getUsersDirect();
         setAllUsers(data);
         
-        // Set sensible defaults
+        // Set sensible defaults if not editing
         const verifiers = data.filter((u: User) => u.role === 'verifikator');
         const leaders = data.filter((u: User) => u.role === 'pimpinan');
         
-        // Try to select verifiers in same department/unit if possible
-        const sameDeptVerifier = verifiers.find((v: User) => v.unit_kerja === user.unit_kerja);
-        if (sameDeptVerifier) {
-          setVerifikatorNip(sameDeptVerifier.nip);
-        } else if (verifiers.length > 0) {
-          setVerifikatorNip(verifiers[0].nip);
-        }
+        if (!editRequest) {
+          // Try to select verifiers in same department/unit if possible
+          const sameDeptVerifier = verifiers.find((v: User) => v.unit_kerja === user.unit_kerja);
+          if (sameDeptVerifier) {
+            setVerifikatorNip(sameDeptVerifier.nip);
+          } else if (verifiers.length > 0) {
+            setVerifikatorNip(verifiers[0].nip);
+          }
 
-        const sameDeptLeader = leaders.find((l: User) => l.unit_kerja === user.unit_kerja);
-        if (sameDeptLeader) {
-          setPimpinanNip(sameDeptLeader.nip);
-        } else if (leaders.length > 0) {
-          setPimpinanNip(leaders[0].nip);
+          const sameDeptLeader = leaders.find((l: User) => l.unit_kerja === user.unit_kerja);
+          if (sameDeptLeader) {
+            setPimpinanNip(sameDeptLeader.nip);
+          } else if (leaders.length > 0) {
+            setPimpinanNip(leaders[0].nip);
+          }
+        } else {
+          setVerifikatorNip(editRequest.verifikatorNip || '');
+          setPimpinanNip(editRequest.pimpinanNip || '');
         }
       } catch (err) {
         console.error("Error fetching officers:", err);
@@ -95,7 +120,7 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
       }
     }
     fetchUsers();
-  }, [user]);
+  }, [user, editRequest]);
 
   // Fetch and calculate remaining leave allowance
   useEffect(() => {
@@ -161,6 +186,11 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
 
   // Adjust catatanCuti fields based on selected jenisCuti as default guidance
   useEffect(() => {
+    // If editing and the selected type matches the editRequest type, preserve the existing catatanCuti
+    if (editRequest && jenisCuti === editRequest.jenisCuti && editRequest.catatanCuti) {
+      setCatatanCuti(editRequest.catatanCuti);
+      return;
+    }
     // If they change leave type, set some demo/sensible default notes to help them
     const newCatatan = { ...catatanCuti };
     if (jenisCuti !== 'tahunan') {
@@ -177,9 +207,9 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
     newCatatan.luarTanggungan = jenisCuti === 'luar_tanggungan' ? 'Tersedia' : '-';
 
     setCatatanCuti(newCatatan);
-  }, [jenisCuti, remainingTahunan]);
+  }, [jenisCuti, remainingTahunan, editRequest]);
 
-          // Automatically calculate lamaHari from tanggalMulai and tanggalSelesai
+          // Automatically calculate lamaHari from tanggalMulai and tanggalSelesai (excluding Saturdays and Sundays)
   useEffect(() => {
     if (tanggalMulai && tanggalSelesai) {
       const startParts = tanggalMulai.split('-').map(Number);
@@ -190,19 +220,27 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
         const endDate = new Date(endParts[0], endParts[1] - 1, endParts[2]);
         
         if (endDate >= startDate) {
-          const diffTime = endDate.getTime() - startDate.getTime();
-          const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
-          setLamaHari(diffDays);
+          let workDaysCount = 0;
+          const curDate = new Date(startDate.getTime());
+          while (curDate <= endDate) {
+            const dayOfWeek = curDate.getDay(); // 0 is Sunday, 6 is Saturday
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+              workDaysCount++;
+            }
+            curDate.setDate(curDate.getDate() + 1);
+          }
+
+          setLamaHari(workDaysCount);
           
           if (jenisCuti === 'tahunan') {
-            const updatedSisa = Math.max(0, remainingTahunan - diffDays);
+            const updatedSisa = Math.max(0, remainingTahunan - workDaysCount);
             setCatatanCuti(prev => ({
                 ...prev,
                 tahunan: { ...prev.tahunan, n: updatedSisa.toString() }
             }));
           }
         } else {
-          setLamaHari(1);
+          setLamaHari(0);
         }
       }
     }
@@ -233,8 +271,8 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
       const activeVerif = allUsers.find(u => u.nip === verifikatorNip);
       const activePimp = allUsers.find(u => u.nip === pimpinanNip);
 
-      const newLeave: LeaveRequest = {
-        id: `cuti_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+      const savedLeave: LeaveRequest = {
+        id: editRequest ? editRequest.id : `cuti_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
         nip: user.nip,
         nama: user.nama,
         jabatan: user.jabatan,
@@ -259,20 +297,20 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
         pimpinanNama: activePimp?.nama || '',
         pimpinanJabatan: activePimp?.jabatan || '',
         
-        createdAt: new Date().toISOString()
+        createdAt: editRequest ? editRequest.createdAt : new Date().toISOString()
       };
 
-      await saveLeaveDirect(newLeave);
+      await saveLeaveDirect(savedLeave);
 
       // Trigger notification for verifikator
       await triggerNotificationDirect(
         verifikatorNip,
-        "Pengajuan Cuti Baru",
-        `${user.nama} mengajukan cuti ${jenisCuti} selama ${lamaHari} hari dan membutuhkan verifikasi Anda.`
+        editRequest ? "Perbaikan Pengajuan Cuti" : "Pengajuan Cuti Baru",
+        `${user.nama} mengajukan ${editRequest ? 'perbaikan ' : ''}cuti ${jenisCuti} selama ${lamaHari} hari dan membutuhkan verifikasi Anda.`
       );
 
       // Success
-      onSuccess(newLeave);
+      onSuccess(savedLeave);
       
       // Reset form
       setAlasan('');
@@ -307,14 +345,31 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
   return (
     <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 lg:p-8">
       {/* Header */}
-      <div className="flex items-center space-x-3 mb-6 pb-6 border-b border-slate-100">
-        <div className="p-3 bg-blue-500/10 text-blue-600 rounded-2xl">
-          <FileText className="w-6 h-6" />
+      <div className="flex items-center justify-between mb-6 pb-6 border-b border-slate-100 flex-wrap gap-4">
+        <div className="flex items-center space-x-3">
+          <div className={`p-3 rounded-2xl ${editRequest ? 'bg-indigo-500/10 text-indigo-600' : 'bg-blue-500/10 text-blue-600'}`}>
+            <FileText className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="font-display font-bold text-lg text-slate-900">
+              {editRequest ? 'Perbaikan Formulir Permintaan Cuti' : 'Formulir Permintaan & Pemberian Cuti'}
+            </h3>
+            <p className="text-xs text-slate-500">
+              {editRequest 
+                ? `Memperbaiki pengajuan cuti #${editRequest.id.split('_')[1] || editRequest.id} yang perlu perubahan` 
+                : 'Isi formulir pengajuan cuti berjenjang sesuai format BASARNAS'}
+            </p>
+          </div>
         </div>
-        <div>
-          <h3 className="font-display font-bold text-lg text-slate-900">Formulir Permintaan & Pemberian Cuti</h3>
-          <p className="text-xs text-slate-500">Isi formulir pengajuan cuti berjenjang sesuai format BASARNAS</p>
-        </div>
+        {editRequest && onCancelEdit && (
+          <button
+            type="button"
+            onClick={onCancelEdit}
+            className="px-4 py-2 text-xs font-bold border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl transition-all"
+          >
+            Batal Perbaikan
+          </button>
+        )}
       </div>
 
       {!user.signature && (
@@ -456,15 +511,14 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1.5">
-                Jumlah Hari Cuti * <span className="text-[10px] text-blue-600 font-medium">(Dihitung otomatis)</span>
+                Jumlah Hari Cuti * <span className="text-[10px] text-blue-600 font-medium">(Dihitung otomatis - Sabtu & Minggu tidak dihitung)</span>
               </label>
               <input
                 type="number"
                 required
-                min={1}
+                readOnly
                 value={lamaHari}
-                onChange={(e) => setLamaHari(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-800"
+                className="w-full px-4 py-3 bg-slate-100/80 border border-slate-200 rounded-2xl text-sm focus:outline-none text-slate-500 cursor-not-allowed font-medium font-mono"
               />
             </div>
             <div>
@@ -507,7 +561,7 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
         <div>
           <div className="flex items-center space-x-2 mb-4">
             <span className="w-6 h-6 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center justify-center">V</span>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">CATATAN CUTI (Sisa Kuota/Keterangan Cuti Saat Ini)</h4>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">CATATAN CUTI (Sisa Kuota/Keterangan Cuti Saat Ini - Otomatis)</h4>
           </div>
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -515,39 +569,27 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
                 <label className="block text-[10px] font-bold text-slate-500 uppercase">Cuti Tahunan N-2 (Sisa)</label>
                 <input
                   type="text"
+                  readOnly
                   value={catatanCuti.tahunan.nMinus2}
-                  onChange={(e) => setCatatanCuti({
-                    ...catatanCuti,
-                    tahunan: { ...catatanCuti.tahunan, nMinus2: e.target.value }
-                  })}
-                  placeholder="-"
-                  className="w-full mt-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800"
+                  className="w-full mt-1 px-3 py-1.5 bg-slate-100/60 border border-slate-200 rounded-xl text-xs focus:outline-none text-slate-500 cursor-not-allowed font-medium"
                 />
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase">Cuti Tahunan N-1 (Sisa 2025)</label>
                 <input
                   type="text"
+                  readOnly
                   value={catatanCuti.tahunan.nMinus1}
-                  onChange={(e) => setCatatanCuti({
-                    ...catatanCuti,
-                    tahunan: { ...catatanCuti.tahunan, nMinus1: e.target.value }
-                  })}
-                  placeholder="-"
-                  className="w-full mt-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800"
+                  className="w-full mt-1 px-3 py-1.5 bg-slate-100/60 border border-slate-200 rounded-xl text-xs focus:outline-none text-slate-500 cursor-not-allowed font-medium"
                 />
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase">Cuti Tahunan N (Kuota Berjalan 2026)</label>
                 <input
                   type="text"
+                  readOnly
                   value={catatanCuti.tahunan.n}
-                  onChange={(e) => setCatatanCuti({
-                    ...catatanCuti,
-                    tahunan: { ...catatanCuti.tahunan, n: e.target.value }
-                  })}
-                  placeholder="12"
-                  className="w-full mt-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800"
+                  className="w-full mt-1 px-3 py-1.5 bg-slate-100/60 border border-slate-200 rounded-xl text-xs focus:outline-none text-slate-500 cursor-not-allowed font-medium"
                 />
               </div>
             </div>
@@ -557,45 +599,45 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
                 <label className="block text-[9px] font-bold text-slate-500 uppercase">Cuti Besar</label>
                 <input
                   type="text"
+                  readOnly
                   value={catatanCuti.besar}
-                  onChange={(e) => setCatatanCuti({ ...catatanCuti, besar: e.target.value })}
-                  className="w-full mt-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800"
+                  className="w-full mt-1 px-3 py-1.5 bg-slate-100/60 border border-slate-200 rounded-xl text-xs focus:outline-none text-slate-500 cursor-not-allowed font-medium"
                 />
               </div>
               <div>
                 <label className="block text-[9px] font-bold text-slate-500 uppercase">Cuti Sakit</label>
                 <input
                   type="text"
+                  readOnly
                   value={catatanCuti.sakit}
-                  onChange={(e) => setCatatanCuti({ ...catatanCuti, sakit: e.target.value })}
-                  className="w-full mt-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800"
+                  className="w-full mt-1 px-3 py-1.5 bg-slate-100/60 border border-slate-200 rounded-xl text-xs focus:outline-none text-slate-500 cursor-not-allowed font-medium"
                 />
               </div>
               <div>
                 <label className="block text-[9px] font-bold text-slate-500 uppercase">Cuti Melahirkan</label>
                 <input
                   type="text"
+                  readOnly
                   value={catatanCuti.melahirkan}
-                  onChange={(e) => setCatatanCuti({ ...catatanCuti, melahirkan: e.target.value })}
-                  className="w-full mt-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800"
+                  className="w-full mt-1 px-3 py-1.5 bg-slate-100/60 border border-slate-200 rounded-xl text-xs focus:outline-none text-slate-500 cursor-not-allowed font-medium"
                 />
               </div>
               <div>
                 <label className="block text-[9px] font-bold text-slate-500 uppercase">Cuti Alasan Penting</label>
                 <input
                   type="text"
+                  readOnly
                   value={catatanCuti.alasanPenting}
-                  onChange={(e) => setCatatanCuti({ ...catatanCuti, alasanPenting: e.target.value })}
-                  className="w-full mt-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800"
+                  className="w-full mt-1 px-3 py-1.5 bg-slate-100/60 border border-slate-200 rounded-xl text-xs focus:outline-none text-slate-500 cursor-not-allowed font-medium"
                 />
               </div>
               <div>
                 <label className="block text-[9px] font-bold text-slate-500 uppercase">Luar Tanggungan</label>
                 <input
                   type="text"
+                  readOnly
                   value={catatanCuti.luarTanggungan}
-                  onChange={(e) => setCatatanCuti({ ...catatanCuti, luarTanggungan: e.target.value })}
-                  className="w-full mt-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800"
+                  className="w-full mt-1 px-3 py-1.5 bg-slate-100/60 border border-slate-200 rounded-xl text-xs focus:outline-none text-slate-500 cursor-not-allowed font-medium"
                 />
               </div>
             </div>
@@ -706,7 +748,7 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
                   <option value="">-- Pilih Atasan Langsung (Verifikator) --</option>
                   {verifiers.map((v) => (
                     <option key={v.nip} value={v.nip}>
-                      {v.nama} - {v.jabatan.split(' (E')[0]} ({v.nip}){approvalScope === 'external' ? ` [Unit: ${v.unit_kerja}]` : ''}
+                      {v.nama}
                     </option>
                   ))}
                 </select>
@@ -740,7 +782,7 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
                   <option value="">-- Pilih Pejabat Berwenang (Pimpinan) --</option>
                   {leaders.map((l) => (
                     <option key={l.nip} value={l.nip}>
-                      {l.nama} - {l.jabatan} ({l.nip}){approvalScope === 'external' ? ` [Unit: ${l.unit_kerja}]` : ''}
+                      {l.nama}
                     </option>
                   ))}
                 </select>
@@ -753,7 +795,16 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
         </div>
 
         {/* Submit Actions */}
-        <div className="flex justify-end pt-4 border-t border-slate-100">
+        <div className="flex justify-end items-center space-x-3 pt-4 border-t border-slate-100">
+          {editRequest && onCancelEdit && (
+            <button
+              type="button"
+              onClick={onCancelEdit}
+              className="px-5 py-3 text-sm font-semibold border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-2xl transition-all"
+            >
+              Batal Perbaikan
+            </button>
+          )}
           <button
             id="submit-leave-btn"
             type="submit"
@@ -769,7 +820,7 @@ export default function LeaveForm({ user, onSuccess }: LeaveFormProps) {
             ) : (
               <Send className="w-4 h-4" />
             )}
-            <span>{isSubmitting ? 'Mengirim...' : 'Kirim Pengajuan Cuti'}</span>
+            <span>{isSubmitting ? 'Mengirim...' : (editRequest ? 'Kirim Perbaikan Cuti' : 'Kirim Pengajuan Cuti')}</span>
           </button>
         </div>
 

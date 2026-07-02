@@ -5,19 +5,35 @@
 
 import React, { useState } from 'react';
 import { User, UserRole } from '../types';
-import { LogIn, KeyRound, ShieldAlert, Users, Info } from 'lucide-react';
+import { LogIn, KeyRound, ShieldAlert, Users, Info, ShieldCheck } from 'lucide-react';
 import { getUserDirect } from '../lib/firebaseDb';
 
 interface LoginFormProps {
   onLoginSuccess: (user: User) => void;
+  onVerifyCode?: (code: string) => void;
 }
 
-export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
+export default function LoginForm({ onLoginSuccess, onVerifyCode }: LoginFormProps) {
   const [nip, setNip] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<UserRole>('pegawai');
+
+  const [showVerifySection, setShowVerifySection] = useState(false);
+  const [verifyInput, setVerifyInput] = useState('');
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+
+  const handleVerifySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!verifyInput.trim()) {
+      setVerifyError('Harap masukkan ID Berkas.');
+      return;
+    }
+    if (onVerifyCode) {
+      onVerifyCode(verifyInput.trim());
+    }
+  };
 
   // Shortlisted users for quick-demo switching
   const demoUsers: { role: UserRole; nip: string; nama: string; jabatan: string; dept: string }[] = [
@@ -114,7 +130,7 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
         </div>
 
         <div className="relative z-10 text-xs text-slate-500 border-t border-slate-800 pt-6 flex justify-between items-center">
-          <span>&copy; {new Date().getFullYear()} BASARNAS. All rights reserved.</span>
+          <span>&copy; {new Date().getFullYear()} Biro Kepegawaian, Organisasi, dan Tata Laksana. All rights reserved.</span>
           <span className="text-slate-400 font-mono">v1.1.0</span>
         </div>
       </div>
@@ -189,6 +205,67 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
               <span>{isLoading ? 'Memproses...' : 'Masuk ke Sistem'}</span>
             </button>
           </form>
+
+          {/* Public Verification Menu Toggle */}
+          <div className="mt-6 pt-5 border-t border-slate-100 flex flex-col items-center">
+            {!showVerifySection ? (
+              <button
+                type="button"
+                onClick={() => setShowVerifySection(true)}
+                className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100/70 border border-blue-100 px-4 py-2.5 rounded-2xl transition-all flex items-center space-x-1.5 shadow-sm"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>E-Verifikasi Keabsahan Berkas Cuti</span>
+              </button>
+            ) : (
+              <form onSubmit={handleVerifySubmit} className="w-full bg-slate-50 border border-slate-200/60 rounded-2xl p-4 text-left space-y-3 relative overflow-hidden animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-1.5 text-slate-800">
+                    <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                    <span className="text-xs font-extrabold uppercase tracking-wide">Cek Berkas Cuti</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowVerifySection(false);
+                      setVerifyInput('');
+                      setVerifyError(null);
+                    }}
+                    className="text-[10px] text-slate-400 hover:text-slate-600 font-bold"
+                  >
+                    Tutup
+                  </button>
+                </div>
+                
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Masukkan 13 digit <strong>ID Berkas</strong> (dari QR Code atau riwayat cuti) untuk memverifikasi keaslian dokumen cuti ASN.
+                </p>
+
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    maxLength={20}
+                    placeholder="Contoh: 1782960614065"
+                    value={verifyInput}
+                    onChange={(e) => {
+                      setVerifyInput(e.target.value.replace(/\D/g, ''));
+                      setVerifyError(null);
+                    }}
+                    className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-900 font-mono"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow transition-all"
+                  >
+                    Periksa
+                  </button>
+                </div>
+                {verifyError && (
+                  <p className="text-[10px] font-semibold text-red-600 animate-pulse">{verifyError}</p>
+                )}
+              </form>
+            )}
+          </div>
 
           {/* DEMO ACCOUNTS QUICK SWITCHER SECTION */}
           <div className="mt-8 border-t border-slate-100 pt-6">
