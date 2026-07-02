@@ -329,11 +329,8 @@ export default function DocumentVerification({ verifyId, onGoToLogin }: Document
           <div className="pt-6 border-t border-slate-100 text-center space-y-2">
             <div className="flex justify-center items-center space-x-1.5 text-[10px] text-slate-400 font-bold">
               <ShieldCheck className="w-4 h-4 text-emerald-500" />
-              <span>DITANDATANGANI SECARA ELEKTRONIK &bull; BASARNAS</span>
+              <span className="uppercase tracking-wider">DOKUMEN TERVERIFIKASI OLEH SISTEM KAMI</span>
             </div>
-            <p className="text-[10px] text-slate-400 leading-relaxed max-w-lg mx-auto">
-              Dokumen ini sah secara hukum dan ditandatangani secara elektronik berbasis data digital berjenjang BASARNAS. Keaslian informasi di atas dapat diverifikasi kapan saja melalui scan barcode resmi ini.
-            </p>
           </div>
 
         </div>
